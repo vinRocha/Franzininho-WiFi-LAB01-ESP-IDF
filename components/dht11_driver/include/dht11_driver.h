@@ -17,9 +17,6 @@
 
 #include "esp_err.h"
 
-/* GPIO no qual o sensor encontra-se conectado */
-#define DHT11_GPIO                      (15)
-
 /* Estrutura de dado de leitura do sensor */
 typedef struct {
   float relative_humidity;
@@ -27,25 +24,22 @@ typedef struct {
 } dht11_data_t;
 
 /**
- * @brief Loop principal da tarefa DHT11
+ * @brief Solicita inicializacao do driver do sensor DHT11
  *
- * @param arg ponteiro para dados, nao utilizado.
- *
- * Exemplo:
- *
- *   xTaskCreate(Dht11Task, "DHT11", mDHT11_STACK_SIZE, NULL,
- *               mDHT11_PRIORITY, NULL);
+ * @return
+ *    - ESP_OK (0): Success.
+ *    - ESP_FAIL: Falha ao criar a tarefa DHT11_D.
+ *    - ESP_ERR_INVALID_STATE: Driver ja encontra-se inicializado.
  *
  */
-void Dht11Task(void *pvParameters);
+esp_err_t Dht11Init(void);
 
 /**
  * @brief Solicita atualizacao de leitura do sensor
  *
  * @return
- *    - ESP_OK (0): Success
- *    - ESP_ERR_INVALID_STATE: Tarefa DHT11 nao esta executando.
- *                             Tentar criar a tarefa novamente com xTaskCreate.
+ *    - ESP_OK (0): Success.
+ *    - ESP_ERR_INVALID_STATE: Driver nao inicializado.
  *
  */
 esp_err_t Dht11Update(void);
@@ -53,14 +47,13 @@ esp_err_t Dht11Update(void);
 /**
  * @brief Escreve ultima leitura valida do sensor
  *
- * @param dht11_data ponteiro para uma estrutura dht11_data_t aonde
- *                   o resultado da leitura sera salvo.
+ * @param dht11_data ponteiro para uma estrutura dht11_data_t no qual
+ *                   o resultado da leitura sera gravado.
  *
  * @return
- *    - ESP_OK (0): Success
+ *    - ESP_OK (0): Success.
  *    - ESP_ERR_NOT_FINISHED:  Leitura em andamento, tente novamente.
- *    - ESP_ERR_INVALID_STATE: Tarefa DHT11 nao esta executando.
- *                             Tentar criar a tarefa novamente com xTaskCreate.
+ *    - ESP_ERR_INVALID_STATE: Driver nao inicializado.
  *
  */
 esp_err_t Dht11Read(dht11_data_t *dht11_data);

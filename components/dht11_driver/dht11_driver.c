@@ -25,18 +25,21 @@
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"
 #include "dht11_driver.h"
+
+#define DHT11_STACK_SIZE                4096
+#define DHT11_PRIORITY                  2
 
 #define DHT11_BYTES                     5
 #define DHT11_TRIGGER_DELAY_MS          20
 #define DHT11_TIMEOUT_US                5000
+#define DHT11_GPIO                      15
 
 /* Datasheet do sensor:
  * https://www.mouser.com/datasheet/2/758/DHT11-Technical-Data-Sheet-Translated-Version-1143054.pdf
  */
 
-static struct driver_state {
+struct driver_state {
 /* Contador de bits recebidos */
   int bit_count;
 
@@ -61,7 +64,9 @@ static struct driver_state {
 
 /* Variavel para verificar erro */
   esp_err_t rc;
-} d_state;
+};
+
+static struct driver_state *m_d_statep = NULL;
 
 /**
  * @brief Callback para timout do timer.
@@ -73,7 +78,7 @@ static struct driver_state {
  * Nao utilizado. arg = NULL
  *
  */
-static void TimeoutCallback(void *arg);
+static void m_TimeoutCallback(void *arg);
 
 /**
  * @brief Callback de interupcao do GPIO.
@@ -84,10 +89,10 @@ static void TimeoutCallback(void *arg);
  * Nao utilizado. arg = NULL
  *
  */
-static void GpioRecvData(void *arg);
+static void m_GpioRecvData(void *arg);
 
 /**
- * @brief Inicializacao para execucao da tarefa de leitura do sensor
+ * @brief Inicializacao interna do driver DHT11.
  *
  * Configura o pino GPIO do sensor e prepara o timer para indicar
  * final de leitura.
@@ -97,7 +102,7 @@ static void GpioRecvData(void *arg);
  *    - Negative value: Error
  *
  */
-static esp_err_t Dht11Init(void);
+static esp_err_t m_Dht11Init(void);
 
 /**
  * @brief Loop principal da tarefa DHT11
@@ -108,12 +113,15 @@ static esp_err_t Dht11Init(void);
  * Nao utilizado. arg = NULL
  *
  */
-void Dht11Task(void *pvParameters) {
+static void m_Dht11Task(void *pvParameters) {
 
-  if (Dht11Init()) {
+  struct driver_state d_state;
+  m_d_statep = &d_state;
+
+  if (m_Dht11Init()) {
     fprintf(stderr, "Erro durante a initializacao do driver DHT11.\n"
                     "error code: %d \n", d_state.rc);
-    d_state.task_handle = NULL;
+    m_d_statep = NULL;
     vTaskDelete(NULL);
     return;
   }
@@ -164,7 +172,6 @@ void Dht11Task(void *pvParameters) {
     }
 
     d_state.data_ready = 1;
-    vTaskDelay(1000 / portTICK_PERIOD_MS); //intervalo entre atualizacoes > 1s
   }
 
 //Nao deveria chegar aqui, a nao ser com erro.
@@ -181,24 +188,24 @@ driver_error:
   }
 
   fprintf(stderr, "Deletando a tarefa DHT11...\n");
-  d_state.task_handle = NULL;
+  m_d_statep = NULL;
   vTaskDelete(NULL);
 
   return;
 }
 
-esp_err_t Dht11Init(void) {
+esp_err_t m_Dht11Init(void) {
 
-  d_state.rc = ESP_OK;
-  memset(d_state.bytes, 0, sizeof(d_state.bytes));
-  d_state.data_ready = 1;
+  m_d_statep->rc = ESP_OK;
+  memset(m_d_statep->bytes, 0, sizeof(m_d_statep->bytes));
+  m_d_statep->data_ready = 1;
 
   //Para trigar nova medicao ou retomar execucao da tarefa apos medicao
-  d_state.task_handle = xTaskGetCurrentTaskHandle();
+  m_d_statep->task_handle = xTaskGetCurrentTaskHandle();
 
   //Configuracao do timer de timeout de medicao
   const esp_timer_create_args_t timer_param = {
-    .callback = TimeoutCallback,
+    .callback = m_TimeoutCallback,
     .arg = NULL,
     .dispatch_method = ESP_TIMER_TASK,
     .name = "DHT11",
@@ -213,45 +220,64 @@ esp_err_t Dht11Init(void) {
     .intr_type = GPIO_INTR_NEGEDGE
   };
 
-  if ((d_state.rc = esp_timer_create(&timer_param, &(d_state.timer_handle))))
-    return d_state.rc = -1;
+  if ((m_d_statep->rc = esp_timer_create(&timer_param, &(m_d_statep->timer_handle))))
+    return m_d_statep->rc = -1;
 
-  if ((d_state.rc = gpio_config(&gpio_handle)))
-    return d_state.rc = -2;
+  if ((m_d_statep->rc= gpio_config(&gpio_handle)))
+    return m_d_statep->rc = -2;
 
-  if((d_state.rc = gpio_set_level(DHT11_GPIO, 1)))
-    return d_state.rc = -3;
+  if((m_d_statep->rc = gpio_set_level(DHT11_GPIO, 1)))
+    return m_d_statep->rc = -3;
 
-  if ((d_state.rc = gpio_install_isr_service(ESP_INTR_FLAG_LOWMED)))
-    return d_state.rc = -4;
+  if ((m_d_statep->rc = gpio_install_isr_service(ESP_INTR_FLAG_LOWMED)))
+    return m_d_statep->rc = -4;
 
-  if ((d_state.rc = gpio_isr_handler_add(DHT11_GPIO, GpioRecvData, NULL)))
-    return d_state.rc = -5;
+  if ((m_d_statep->rc = gpio_isr_handler_add(DHT11_GPIO, m_GpioRecvData, NULL)))
+    return m_d_statep->rc = -5;
 
-  return d_state.rc;
+  return m_d_statep->rc;
 }
 
 
-void GpioRecvData(void *arg) {
+void m_GpioRecvData(void *arg) {
 
-  d_state.current_time = esp_timer_get_time();
-  esp_timer_restart(d_state.timer_handle, DHT11_TIMEOUT_US);
-  d_state.bitstream <<= 1;
-  d_state.bitstream += (d_state.current_time - d_state.previous_time < 100) ? 0 : 1;
-  d_state.bit_count++;
-  d_state.previous_time = d_state.current_time;
+  m_d_statep->current_time = esp_timer_get_time();
+  esp_timer_restart(m_d_statep->timer_handle, DHT11_TIMEOUT_US);
+  m_d_statep->bitstream <<= 1;
+  m_d_statep->bitstream += (m_d_statep->current_time - m_d_statep->previous_time < 100) ? 0 : 1;
+  m_d_statep->bit_count++;
+  m_d_statep->previous_time = m_d_statep->current_time;
 }
 
 
-void TimeoutCallback(void *arg) {
+void m_TimeoutCallback(void *arg) {
 
-  vTaskResume(d_state.task_handle);
+  vTaskResume(m_d_statep->task_handle);
+}
+
+/* Init publico do driver DHT11 */
+esp_err_t Dht11Init() {
+  if (m_d_statep) {
+    return ESP_ERR_NOT_ALLOWED;
+  }
+
+  /*  Registra a tarefa DHT11 */
+  if (xTaskCreate(m_Dht11Task, "DHT11_D", DHT11_STACK_SIZE, NULL,
+                  DHT11_PRIORITY, NULL) != pdPASS) {
+    fprintf(stderr, "Erro criando a tarefa DHT11...\n");
+    return ESP_FAIL;
+  }
+
+  return ESP_OK;
 }
 
 esp_err_t Dht11Update(void) {
-  if (d_state.task_handle) {
-    if (d_state.data_ready) {
-      vTaskResume(d_state.task_handle);
+  int64_t current_time;
+  if (m_d_statep) {
+    current_time = esp_timer_get_time();
+    /* Pelo menos 1 segundo de intervalo entre as medicoes */
+    if ((current_time - m_d_statep->previous_time) > 1000 * 1000) {
+      vTaskResume(m_d_statep->task_handle);
     }
     return ESP_OK;
   }
@@ -259,27 +285,27 @@ esp_err_t Dht11Update(void) {
 }
 
 esp_err_t Dht11Read(dht11_data_t *dht11_data) {
-  if (d_state.task_handle) {
-    if (d_state.data_ready) {
+  if (m_d_statep) {
+    if (m_d_statep->data_ready && dht11_data) {
       //Converte ponto fixo em ponto flutuante...
-      float temp = d_state.bytes[0];
+      float temp = m_d_statep->bytes[0];
       dht11_data->relative_humidity = temp;
       int i = 10;
-      while (d_state.bytes[1] / i) {
+      while (m_d_statep->bytes[1] / i) {
         i = i * 10;
       }
       temp = i;
-      temp = d_state.bytes[1] / temp;
+      temp = m_d_statep->bytes[1] / temp;
       dht11_data->relative_humidity += temp;
 
-      temp = d_state.bytes[2];
+      temp = m_d_statep->bytes[2];
       dht11_data->temperature = temp;
       i = 10;
-      while (d_state.bytes[3] / i) {
+      while (m_d_statep->bytes[3] / i) {
         i = i * 10;
       }
       temp = i;
-      temp = d_state.bytes[3] / temp;
+      temp = m_d_statep->bytes[3] / temp;
       dht11_data->temperature += temp;
 
       return ESP_OK;
