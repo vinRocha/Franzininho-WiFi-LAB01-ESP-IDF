@@ -16,6 +16,8 @@
 #pragma once
 
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 /* Estrutura de dado de leitura do sensor */
 typedef struct {
@@ -32,7 +34,7 @@ typedef struct {
  *    - ESP_ERR_INVALID_STATE: Driver ja encontra-se inicializado.
  *
  */
-esp_err_t Dht11Init(void);
+esp_err_t Dht11Init(TaskHandle_t *task);
 
 /**
  * @brief Solicita atualizacao de leitura do sensor

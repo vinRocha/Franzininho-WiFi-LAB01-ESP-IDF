@@ -256,14 +256,14 @@ void m_TimeoutCallback(void *arg) {
 }
 
 /* Init publico do driver DHT11 */
-esp_err_t Dht11Init() {
+esp_err_t Dht11Init(TaskHandle_t *task) {
   if (m_d_statep) {
     return ESP_ERR_NOT_ALLOWED;
   }
 
   /*  Registra a tarefa DHT11 */
   if (xTaskCreate(m_Dht11Task, "DHT11_D", DHT11_STACK_SIZE, NULL,
-                  DHT11_PRIORITY, NULL) != pdPASS) {
+                  DHT11_PRIORITY, task) != pdPASS) {
     fprintf(stderr, "Erro criando a tarefa DHT11...\n");
     return ESP_FAIL;
   }

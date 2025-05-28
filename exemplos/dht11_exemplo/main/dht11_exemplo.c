@@ -27,8 +27,9 @@
 void app_main(void) {
 
   dht11_data_t dht11_data;
+  TaskHandle_t dht11_task;
 
-  if (Dht11Init() != ESP_OK) {
+  if (Dht11Init(&dht11_task) != ESP_OK) {
     fprintf(stderr, "Erro ao inicializar o driver DHT11...\n");
     for(;;){}
   }
@@ -43,6 +44,8 @@ void app_main(void) {
       fprintf(stdout, "HuRe: %.2f\nTemp: %.2f\n\n",
               dht11_data.relative_humidity, dht11_data.temperature);
     }
+
+    fprintf(stdout, "uxTaskGetStackHighWaterMark2: %lu\n", uxTaskGetStackHighWaterMark2(dht11_task));
 
     vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
