@@ -27,7 +27,7 @@
 #include "freertos/task.h"
 #include "dht11_driver.h"
 
-#define DHT11_STACK_SIZE                4096
+#define DHT11_STACK_SIZE                2056
 #define DHT11_PRIORITY                  2
 
 #define DHT11_BYTES                     5
