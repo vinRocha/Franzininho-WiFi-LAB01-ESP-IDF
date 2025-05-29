@@ -27,13 +27,9 @@
 #include "freertos/task.h"
 #include "dht11_driver.h"
 
-#define DHT11_STACK_SIZE                2056
-#define DHT11_PRIORITY                  2
-
 #define DHT11_BYTES                     5
 #define DHT11_TRIGGER_DELAY_MS          20
 #define DHT11_TIMEOUT_US                5000
-#define DHT11_GPIO                      15
 
 /* Datasheet do sensor:
  * https://www.mouser.com/datasheet/2/758/DHT11-Technical-Data-Sheet-Translated-Version-1143054.pdf
@@ -130,8 +126,8 @@ static void m_Dht11Task(void *pvParameters) {
     vTaskSuspend(NULL); //aguarda solicitacao de nova leitura.
     d_state.data_ready = 0;
 
-    //Configura DHT11_GPIO para zero por > 20ms para disparar uma nova leitura.
-    if (gpio_set_level(DHT11_GPIO, 0)) {
+    //Configura CONFIG_DHT11_GPIO para zero por > 20ms para disparar uma nova leitura.
+    if (gpio_set_level(CONFIG_DHT11_GPIO, 0)) {
       d_state.rc = -1; //gpio_error
       goto driver_error;
     }
@@ -147,7 +143,7 @@ static void m_Dht11Task(void *pvParameters) {
       goto driver_error;
     }
 
-    if (gpio_set_level(DHT11_GPIO, 1)) {
+    if (gpio_set_level(CONFIG_DHT11_GPIO, 1)) {
       d_state.rc = -1; //gpio_error
       goto driver_error;
     }
@@ -213,7 +209,7 @@ esp_err_t m_Dht11Init(void) {
   };
 
   const  gpio_config_t gpio_handle = {
-    .pin_bit_mask = 1LLU << DHT11_GPIO,
+    .pin_bit_mask = 1LLU << CONFIG_DHT11_GPIO,
     .mode = GPIO_MODE_INPUT_OUTPUT_OD,
     .pull_up_en = GPIO_PULLUP_DISABLE,
     .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -226,13 +222,13 @@ esp_err_t m_Dht11Init(void) {
   if ((m_d_statep->rc= gpio_config(&gpio_handle)))
     return m_d_statep->rc = -2;
 
-  if((m_d_statep->rc = gpio_set_level(DHT11_GPIO, 1)))
+  if((m_d_statep->rc = gpio_set_level(CONFIG_DHT11_GPIO, 1)))
     return m_d_statep->rc = -3;
 
   if ((m_d_statep->rc = gpio_install_isr_service(ESP_INTR_FLAG_LOWMED)))
     return m_d_statep->rc = -4;
 
-  if ((m_d_statep->rc = gpio_isr_handler_add(DHT11_GPIO, m_GpioRecvData, NULL)))
+  if ((m_d_statep->rc = gpio_isr_handler_add(CONFIG_DHT11_GPIO, m_GpioRecvData, NULL)))
     return m_d_statep->rc = -5;
 
   return m_d_statep->rc;
@@ -262,8 +258,8 @@ esp_err_t Dht11Init() {
   }
 
   /*  Registra a tarefa DHT11 */
-  if (xTaskCreate(m_Dht11Task, "DHT11_D", DHT11_STACK_SIZE, NULL,
-                  DHT11_PRIORITY, NULL) != pdPASS) {
+  if (xTaskCreate(m_Dht11Task, "DHT11_D", CONFIG_DHT11_TASK_STACK_SIZE, NULL,
+                  CONFIG_DHT11_TASK_PRIORITY, NULL) != pdPASS) {
     fprintf(stderr, "Erro criando a tarefa DHT11...\n");
     return ESP_FAIL;
   }
