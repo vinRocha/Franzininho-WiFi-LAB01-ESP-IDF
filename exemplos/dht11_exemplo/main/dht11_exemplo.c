@@ -26,16 +26,20 @@
  */
 void app_main(void) {
 
+  /* Estrutura para receber os dados lidos do sensor */
   dht11_data_t dht11_data;
 
+  /* Inicia o driver do sensor DHT11 */
   if (Dht11Init() != ESP_OK) {
     fprintf(stderr, "Erro ao inicializar o driver DHT11...\n");
     for(;;){}
   }
 
+  /* Loop infinito da aplicacao */
   for (;;) {
 
     Dht11Update(); //solicita atualizacao do sensor
+
     vTaskDelay(50 / portTICK_PERIOD_MS); //executa qualquer outra tarefa por 50ms
 
     if (!Dht11Read(&dht11_data)) { //solicita leitura atualizada do sensor e caso tenha
@@ -47,6 +51,6 @@ void app_main(void) {
     vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
 
-  //Nao deve chegar aqui!!
+  /* Nao deve chegar aqui!! */
   return;
 }
