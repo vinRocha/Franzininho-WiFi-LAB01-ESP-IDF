@@ -1,0 +1,30 @@
+menu "Buzzer Driver"
+
+    choice BUZZER_ATTENUATION
+        bool "Buzzer attenuation"
+        default BUZZER_ATTENUATION_DB_6
+
+        config BUZZER_ATTENUATION_DB_0
+            bool "No attenuation"
+
+        config BUZZER_ATTENUATION_DB_6
+            bool "6dB attenuation"
+
+        config BUZZER_ATTENUATION_DB_12
+            bool "12dB attenuation"
+
+    endchoice
+
+    config BUZZER_FREQUENCY
+        int "Buzzer frequency"
+        default 440
+
+    config BUZZER_TASK_PRIORITY
+        int "Buzzer Task Priority"
+        default 3
+
+    config BUZZER_TASK_STACK_SIZE
+        int "Buzzer Task Stack Size in words"
+        default 2056
+
+endmenu
