@@ -73,6 +73,7 @@ esp_err_t Dht11Update(void);
  *
  * @return
  *    - ESP_OK (0): Success.
+ *    - ESP_ERR_INVALID_ARG:   dht11_data = NULL.
  *    - ESP_ERR_NOT_FINISHED:  Leitura em andamento, tente novamente.
  *    - ESP_ERR_INVALID_STATE: Driver nao inicializado.
  *
