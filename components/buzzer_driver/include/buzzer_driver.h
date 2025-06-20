@@ -35,6 +35,8 @@
 #pragma once
 
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 /**
  * @brief Solicita inicializacao do driver do buzzer.
@@ -45,7 +47,7 @@
  *    - ESP_ERR_NOT_ALLOWED: Driver ja encontra-se inicializado.
  *
  */
-esp_err_t BuzzerInit(void);
+esp_err_t BuzzerInit(TaskHandle_t *task);
 
 /**
  * @brief Liga e desliga o buzzer.

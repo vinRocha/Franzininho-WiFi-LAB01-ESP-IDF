@@ -147,14 +147,14 @@ esp_err_t s_BuzzerInit(void) {
 /* Init publico do driver do buzzer.
  * Apenas registra a tarefa no sistema, a inicializacao
  * do dac_0 e realizada no init privado. */
-esp_err_t BuzzerInit() {
+esp_err_t BuzzerInit(TaskHandle_t *task) {
 
   if (s_d_statep) {
     return ESP_ERR_NOT_ALLOWED;
   }
   /*  Registra a tarefa BUZZER_D */
   if (xTaskCreate(s_BuzzerTask, s_TAG, CONFIG_BUZZER_TASK_STACK_SIZE, NULL,
-                  CONFIG_BUZZER_TASK_PRIORITY, NULL) != pdPASS) {
+                  CONFIG_BUZZER_TASK_PRIORITY, task) != pdPASS) {
     ESP_LOGE(s_TAG, "Erro criando a tarefa %s...", s_TAG);
     return ESP_FAIL;
   }

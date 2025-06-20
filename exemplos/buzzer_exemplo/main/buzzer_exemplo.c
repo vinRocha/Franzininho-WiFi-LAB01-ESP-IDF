@@ -51,8 +51,9 @@ void app_main(void) {
                   "Confirme que o jumper de ativacao do buzzer "
                   "encontra-se instalado");
 
+  TaskHandle_t buzzer_task;
   /* Inicia o driver do buzzer */
-  if (BuzzerInit() != ESP_OK) {
+  if (BuzzerInit(&buzzer_task) != ESP_OK) {
     ESP_LOGE(s_TAG, "Erro ao inicializar o driver do buzzer...\n");
     for(;;){}
   }
@@ -82,7 +83,9 @@ void app_main(void) {
     /* Desativa o modo beat e aguarda 2 segundos */
     BuzzerPulse(0, 0); //ou BuzerSet(0);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
+    ESP_LOGI(s_TAG, "uxTaskGetStackHighWaterMark2: %lu\n", uxTaskGetStackHighWaterMark2(buzzer_task));
   }
+
 
   /* Nao deve chegar aqui!! */
   return;
