@@ -32,7 +32,6 @@
  * @date 29 de Maio de 2025
  */
 
-#include <stdio.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -70,18 +69,18 @@ void app_main(void) {
       vTaskDelay(1500 / portTICK_PERIOD_MS);
     }
 
-    /* Configura buzzer no modo beat com periodo de 0.6s
-     * e duty_cycle de 40%. 
+    /* Configura buzzer no modo beat com periodo de 0.3s
+     * e duty_cycle de 50%.
      *
      * Nesse modo nao precisamos nos preocupar em ligar e 
      * desligar o buzzer via BuzzerSet() */
-    BuzzerBeat(300, 50);
+    BuzzerPulse(300, 50);
 
     /* Aguarda 8 repeticoes do modo beat */
     vTaskDelay(300 * 8 / portTICK_PERIOD_MS);
 
-    /* Desativa o modo beat */
-    BuzzerSet(0);
+    /* Desativa o modo beat e aguarda 2 segundos */
+    BuzzerPulse(0, 0); //ou BuzerSet(0);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
   }
 

@@ -74,4 +74,4 @@ esp_err_t BuzzerSet(char value);
  *    - ESP_ERR_INVALID_STATE: Driver nao inicializado.
  *
  */
-esp_err_t BuzzerBeat(unsigned period, unsigned duty_cycle);
+esp_err_t BuzzerPulse(unsigned period, unsigned duty_cycle);
