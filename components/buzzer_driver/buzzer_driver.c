@@ -34,7 +34,6 @@
  * @date 29 de Maio de 2025
  */
 
-#include <stdio.h>
 #include "esp_log.h"
 #include "driver/dac_cosine.h"
 #include "freertos/FreeRTOS.h"
@@ -53,16 +52,13 @@ static const char *s_TAG = "BUZZER_D";
 
 struct driver_state {
 
-/* Handle da tarefa para que se possa disparar modo beat */
+/* Handle da tarefa para que se possa disparar modo pulse_mode */
   TaskHandle_t task_handle;
 
-/* Ativa modo beat */
-  char beat;
-
-/* Periodo em MS para tocar o buzzer (BuzzerBeat) */
+/* Periodo em MS para tocar o buzzer (BuzzerPulse) */
   unsigned period_on;
 
-/* Periodo em MS para desligar o buzzer (BuzzerBeat) */
+/* Periodo em MS para desligar o buzzer (BuzzerPulse) */
   unsigned period_off;
 
 /* Handle para output de onda cossenoidal no GPIO_17 -> DAC_0 */
@@ -77,7 +73,7 @@ static struct driver_state *s_d_statep = NULL;
 /**
  * @brief Inicializacao interna do driver do buzzer.
  *
- * Configura DAC cossenoidal no GPIO do buzzer.
+ * Configura DAC cossenoidal no IO do buzzer.
  *
  * @return
  *    - ESP_OK (0): Success
@@ -89,7 +85,7 @@ static esp_err_t s_BuzzerInit(void);
 /**
  * @brief Loop principal da tarefa BUZZER_D
  *
- * Nao deve retornar.
+ * Nao deve retornar. Implementa o modo pulse.
  *
  * @param pvParameters ponteiro para dados.
  * Nao utilizado. arg = NULL
@@ -102,7 +98,7 @@ static void s_BuzzerTask(void *pvParameters) {
 
   if (s_BuzzerInit()) {
     ESP_LOGE(s_TAG, "Erro durante a initializacao do driver.\n"
-                    "error code: %d \n", d_state.rc);
+                    "error code: %d", d_state.rc);
     s_d_statep = NULL;
     vTaskDelete(NULL);
     return;
@@ -110,25 +106,20 @@ static void s_BuzzerTask(void *pvParameters) {
   vTaskSuspend(NULL);
 
   /* Loop principal */
-  /* Implementa buzzer beat */
+  /* Implementa buzzer pulse_mode */
   for (;;) {
-    if (d_state.beat) {
-      //Ativa DAC cossenoidal por period_on ms.
-      dac_cosine_start(d_state.dac0_handle);
-      vTaskDelay((TickType_t) d_state.period_on / portTICK_PERIOD_MS);
-    }
-    else
-      vTaskSuspend(NULL);
-    if (d_state.beat) {
-      //Desliga dac cossenoidal por period_off ms.
-      dac_cosine_stop(d_state.dac0_handle);
-      vTaskDelay((TickType_t) d_state.period_off / portTICK_PERIOD_MS);
-    }
-    else
-      vTaskSuspend(NULL);
+    //Ativa DAC cossenoidal por period_on ms.
+    dac_cosine_start(d_state.dac0_handle);
+    vTaskDelay((TickType_t) d_state.period_on / portTICK_PERIOD_MS);
+
+    //Desliga dac cossenoidal por period_off ms.
+    dac_cosine_stop(d_state.dac0_handle);
+    vTaskDelay((TickType_t) d_state.period_off / portTICK_PERIOD_MS);
   }
 
   //Nao deveria chegar aqui...
+  dac_cosine_del_channel(d_state.dac0_handle);
+  s_d_statep = NULL;
   return;
 }
 
@@ -139,9 +130,6 @@ esp_err_t s_BuzzerInit(void) {
   //Para suspender ou retomar loop principal
   s_d_statep->task_handle = xTaskGetCurrentTaskHandle();
 
-  //Desativa modo beat
-  s_d_statep->beat = 0;
-
   dac_cosine_config_t cos0_cfg = {
         .chan_id = DAC_CHAN_0,
         .freq_hz = CONFIG_BUZZER_FREQUENCY,
@@ -151,9 +139,7 @@ esp_err_t s_BuzzerInit(void) {
         .atten = BUZZER_ATTENUATION,
         .flags.force_set_freq = true,
   };
-
   s_d_statep->rc = dac_cosine_new_channel(&cos0_cfg, &(s_d_statep->dac0_handle));
-
   return s_d_statep->rc;
 }
 
@@ -162,23 +148,23 @@ esp_err_t s_BuzzerInit(void) {
  * Apenas registra a tarefa no sistema, a inicializacao
  * do dac_0 e realizada no init privado. */
 esp_err_t BuzzerInit() {
+
   if (s_d_statep) {
     return ESP_ERR_NOT_ALLOWED;
   }
-
   /*  Registra a tarefa BUZZER_D */
   if (xTaskCreate(s_BuzzerTask, s_TAG, CONFIG_BUZZER_TASK_STACK_SIZE, NULL,
                   CONFIG_BUZZER_TASK_PRIORITY, NULL) != pdPASS) {
-    ESP_LOGE(s_TAG, "Erro criando a tarefa %s...\n", s_TAG);
+    ESP_LOGE(s_TAG, "Erro criando a tarefa %s...", s_TAG);
     return ESP_FAIL;
   }
-
   return ESP_OK;
 }
 
 esp_err_t BuzzerSet(char value) {
+
   if (s_d_statep) {
-    s_d_statep->beat = 0;
+    vTaskSuspend(s_d_statep->task_handle);
     if (value) {
       dac_cosine_start(s_d_statep->dac0_handle);
     }
@@ -191,12 +177,18 @@ esp_err_t BuzzerSet(char value) {
   return ESP_ERR_INVALID_STATE;
 }
 
-esp_err_t BuzzerBeat(unsigned period, unsigned duty_cycle) {
+esp_err_t BuzzerPulse(unsigned period, unsigned duty_cycle) {
+
   if (s_d_statep) {
-    s_d_statep->period_on = period * duty_cycle / 100;
-    s_d_statep->period_off = period - s_d_statep->period_on;
-    s_d_statep->beat = 1;
-    vTaskResume(s_d_statep->task_handle);
+    duty_cycle = duty_cycle > 100 ? 100 : duty_cycle;
+    if (period) {
+      s_d_statep->period_on = period * duty_cycle / 100;
+      s_d_statep->period_off = period - s_d_statep->period_on;
+      vTaskResume(s_d_statep->task_handle);
+    } else {
+      vTaskSuspend(s_d_statep->task_handle);
+      dac_cosine_stop(s_d_statep->dac0_handle);
+    }
     return ESP_OK;
   }
   return ESP_ERR_INVALID_STATE;

@@ -25,6 +25,6 @@ menu "Buzzer Driver"
 
     config BUZZER_TASK_STACK_SIZE
         int "Buzzer Task Stack Size in words"
-        default 2056
+        default 2048
 
 endmenu
