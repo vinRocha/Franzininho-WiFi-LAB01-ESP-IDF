@@ -143,43 +143,17 @@ esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, con
       memcpy(temp_buffer + x_offset + (i * COLLUMNS) + (y_offset * COLLUMNS), bitmap + (i * x_size), x_size);
     }
 
-    uint8_t byte = 0;
-    int k = 0, index = 0;
+    int index = 0;
     for (int i = 0; index < DISPLAY_SIZE; i++) {
-      int modulo_byte = (i % 8);
-      if (!(i % 64))   k++;
-      if (!(i % 1024)) k = (i / 1024) * 128;
+      int modulo_byte = i % 8;
+      int k = (i / 64) % 16 + (i / 1024) * 128;
       int pos = (7 - ((i / 8) % 8));
-      uint8_t bit = temp_buffer[(modulo_byte * COLLUMNS) + k] >> pos;
-      switch ((7 - modulo_byte)) {
-        case 7:
-          byte += ((bit << 0) & 0x01);
-          break;
-        case 6:
-          byte += ((bit << 1) & 0x02);
-          break;
-        case 5:
-          byte += ((bit << 2) & 0x04);
-          break;
-        case 4:
-          byte += ((bit << 3) & 0x08);
-          break;
-        case 3:
-          byte += ((bit << 4) & 0x10);
-          break;
-        case 2:
-          byte += ((bit << 5) & 0x20);
-          break;
-        case 1:
-          byte += ((bit << 6) & 0x40);
-          break;
-        case 0:
-          byte += ((bit << 7) & 0x80);
-          s_d_state.frame_buffer[index++] = byte;
-          byte = 0;
-          break;
-      }
+      uint8_t bit = (temp_buffer[(modulo_byte * COLLUMNS) + k] >> pos) & 0x01;
+      s_d_state.frame_buffer[index] |= bit << modulo_byte;
+      if (modulo_byte == 7)
+        index++;
     }
+
     esp_lcd_panel_draw_bitmap(s_d_state.panel_handle, 0, 0, 128, 64, s_d_state.frame_buffer);
     return ESP_OK;
   }
