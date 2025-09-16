@@ -51,7 +51,6 @@
 static const char *s_TAG = "BUZZER_D";
 
 struct driver_ctx {
-
 /* Handle da tarefa para que se possa disparar modo pulse_mode */
   TaskHandle_t task_handle;
 
@@ -67,7 +66,6 @@ struct driver_ctx {
 /* Variavel para verificar possivel erro */
   esp_err_t rc;
 };
-
 static struct driver_ctx *s_d_ctxp = NULL;
 
 /**
@@ -149,9 +147,9 @@ esp_err_t s_BuzzerInit(void) {
  * do dac_0 e realizada no init privado. */
 esp_err_t BuzzerInit() {
 
-  if (s_d_ctxp) {
+  if (s_d_ctxp)
     return ESP_ERR_NOT_ALLOWED;
-  }
+
   /*  Registra a tarefa BUZZER_D */
   if (xTaskCreate(s_BuzzerTask, s_TAG, CONFIG_BUZZER_TASK_STACK_SIZE, NULL,
                   CONFIG_BUZZER_TASK_PRIORITY, NULL) != pdPASS) {
@@ -163,34 +161,30 @@ esp_err_t BuzzerInit() {
 
 esp_err_t BuzzerSet(char value) {
 
-  if (s_d_ctxp) {
-    vTaskSuspend(s_d_ctxp->task_handle);
-    if (value) {
-      dac_cosine_start(s_d_ctxp->dac0_handle);
-    }
-    else {
-      dac_cosine_stop(s_d_ctxp->dac0_handle);
-    }
-    return ESP_OK;
+  if (!s_d_ctxp)
+    return ESP_ERR_INVALID_STATE;
 
-  }
-  return ESP_ERR_INVALID_STATE;
+  vTaskSuspend(s_d_ctxp->task_handle);
+  if (value)
+    dac_cosine_start(s_d_ctxp->dac0_handle);
+  else
+    dac_cosine_stop(s_d_ctxp->dac0_handle);
+  return ESP_OK;
 }
 
 esp_err_t BuzzerPulse(unsigned period, unsigned duty_cycle) {
 
-  if (s_d_ctxp) {
-    duty_cycle = duty_cycle > 100 ? 100 : duty_cycle;
-    if (period) {
-      s_d_ctxp->period_on = period * duty_cycle / 100;
-      s_d_ctxp->period_off = period - s_d_ctxp->period_on;
-      vTaskResume(s_d_ctxp->task_handle);
-    } else {
-      vTaskSuspend(s_d_ctxp->task_handle);
-      dac_cosine_stop(s_d_ctxp->dac0_handle);
-    }
-    return ESP_OK;
-  }
-  return ESP_ERR_INVALID_STATE;
-}
+  if (!s_d_ctxp)
+    return ESP_ERR_INVALID_STATE;
 
+  duty_cycle = duty_cycle > 100 ? 100 : duty_cycle;
+  if (period) {
+    s_d_ctxp->period_on = period * duty_cycle / 100;
+    s_d_ctxp->period_off = period - s_d_ctxp->period_on;
+    vTaskResume(s_d_ctxp->task_handle);
+  } else {
+    vTaskSuspend(s_d_ctxp->task_handle);
+    dac_cosine_stop(s_d_ctxp->dac0_handle);
+  }
+  return ESP_OK;
+}

@@ -85,7 +85,6 @@ struct driver_ctx {
 /* Variavel para verificar erro */
   esp_err_t rc;
 };
-
 static struct driver_ctx *s_d_ctxp = NULL;
 
 /**
@@ -136,6 +135,8 @@ static void s_Dht11Task(void *pvParameters) {
   }
 
   for (;;) {
+    d_ctx.data_ready = true;
+
     vTaskSuspend(NULL); //aguarda solicitacao de nova leitura.
     d_ctx.data_ready = false;
 
@@ -145,8 +146,9 @@ static void s_Dht11Task(void *pvParameters) {
       goto driver_error;
     }
     vTaskDelay(DHT11_TRIGGER_DELAY_MS / portTICK_PERIOD_MS);
-
     d_ctx.bit_count = 0;
+
+    //Inicia nova leitura
     if (gpio_set_level(CONFIG_DHT11_GPIO, 1)) {
       d_ctx.rc = -1; //gpio_error
       goto driver_error;
@@ -172,9 +174,8 @@ static void s_Dht11Task(void *pvParameters) {
     if (d_ctx.bit_count < DHT11_BITS_EXPECTED) { //erro de leitura
       ESP_LOGE(s_TAG, "d_ctx.bit_count: %d", d_ctx.bit_count);
       memset(d_ctx.bytes, 0, sizeof(d_ctx.bytes));
-      vTaskDelay(1);
+      vTaskDelay(DHT11_TIMEOUT_MS / portTICK_PERIOD_MS);
       ulTaskNotifyTake(pdTRUE, 0);
-      d_ctx.data_ready = true;
       continue;
     }
 
@@ -182,12 +183,10 @@ static void s_Dht11Task(void *pvParameters) {
     for (int i = 0; i < DHT11_BYTES; i++) {
        d_ctx.bytes[i] = (d_ctx.bitstream >> (32 - 8 * i)) & 0xff;
     }
-
     if (d_ctx.bytes[4] != d_ctx.bytes[0] + d_ctx.bytes[1] +
                          d_ctx.bytes[2] + d_ctx.bytes[3])
       ESP_LOGW(s_TAG, "Warning! Checksum incorreto!");
 
-    d_ctx.data_ready = true;
   }
 
 //Nao deveria chegar aqui, a nao ser com erro.
@@ -212,7 +211,6 @@ esp_err_t s_Dht11Init(void) {
   s_d_ctxp->rc = ESP_OK;
   memset(s_d_ctxp->bytes, 0, sizeof(s_d_ctxp->bytes));
   s_d_ctxp->previous_time = 0;
-  s_d_ctxp->data_ready = true;
 
   //Para trigar nova medicao ou retomar execucao da tarefa apos medicao
   s_d_ctxp->task_handle = xTaskGetCurrentTaskHandle();
@@ -231,12 +229,12 @@ esp_err_t s_Dht11Init(void) {
   if((s_d_ctxp->rc = gpio_set_level(CONFIG_DHT11_GPIO, 1)))
     return s_d_ctxp->rc = -2;
 
-/* TODO gpio_install_isr_service e gpio_isr_handler_add deveriam ficar
- * estar em uma outra biblioteca que tem como funcao gerenciar os registros
- * de interrupcoes de gpio.
+/* TODO: gpio_install_isr_service e gpio_isr_handler_add deveriam estar implementados
+ * em uma outra biblioteca que tem como funcao gerenciar os registros de interrupcoes de gpio.
  */
 
-  if ((s_d_ctxp->rc = gpio_install_isr_service(ESP_INTR_FLAG_LOWMED|ESP_INTR_FLAG_EDGE)))
+  if ((s_d_ctxp->rc = gpio_install_isr_service(ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_EDGE |
+                                               ESP_INTR_FLAG_IRAM)))
     return s_d_ctxp->rc = -3;
 
   if ((s_d_ctxp->rc = gpio_isr_handler_add(CONFIG_DHT11_GPIO, s_GpioRecvData, NULL)))
@@ -246,7 +244,7 @@ esp_err_t s_Dht11Init(void) {
 }
 
 
-void s_GpioRecvData(void *arg) {
+void IRAM_ATTR s_GpioRecvData(void *arg) {
 
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   s_d_ctxp->current_time = esp_timer_get_time();
@@ -273,49 +271,50 @@ esp_err_t Dht11Init() {
 esp_err_t Dht11Update(void) {
 
   int64_t current_time;
-  if (s_d_ctxp) {
-    current_time = esp_timer_get_time();
-    /* Pelo menos 1 segundo de intervalo entre as medicoes */
-    if ((current_time - s_d_ctxp->previous_time) > 1000 * 1000) {
-      vTaskResume(s_d_ctxp->task_handle);
-    }
-    return ESP_OK;
+  if (!s_d_ctxp)
+    return ESP_ERR_INVALID_STATE;
+
+  current_time = esp_timer_get_time();
+  /* Pelo menos 1 segundo de intervalo entre as medicoes */
+  if ((current_time - s_d_ctxp->previous_time) > 1000 * 1000) {
+    vTaskResume(s_d_ctxp->task_handle);
   }
-  return ESP_ERR_INVALID_STATE;
+  return ESP_OK;
 }
 
 esp_err_t Dht11Read(dht11_data_t *dht11_data) {
 
-  if (!dht11_data) {
+  if (!s_d_ctxp)
+    return ESP_ERR_INVALID_STATE;
+
+  if (!dht11_data)
     return ESP_ERR_INVALID_ARG;
-  }
-  if (s_d_ctxp) {
-    if (s_d_ctxp->data_ready) {
-      //Converte ponto fixo em ponto flutuante...
-      float value = s_d_ctxp->bytes[0];
-      dht11_data->relative_humidity = value;
-      int i = 10;
-      while (s_d_ctxp->bytes[1] / i) {
-        i = i * 10;
-      }
-      value = i;
-      value = s_d_ctxp->bytes[1] / value;
-      dht11_data->relative_humidity += value;
 
-      value = s_d_ctxp->bytes[2];
-      dht11_data->temperature = value;
-      i = 10;
-      while (s_d_ctxp->bytes[3] / i) {
-        i = i * 10;
-      }
-      value = i;
-      value = s_d_ctxp->bytes[3] / value;
-      dht11_data->temperature += value;
-
-      return ESP_OK;
-    }
+  if (!s_d_ctxp->data_ready)
     return ESP_ERR_NOT_FINISHED;
-  }
-  return ESP_ERR_INVALID_STATE;
-}
 
+  //Converte ponto fixo em ponto flutuante...
+  unsigned char bytes[DHT11_BYTES];
+  memcpy(bytes, s_d_ctxp->bytes, sizeof(bytes));
+  float value = bytes[0];
+  dht11_data->relative_humidity = value;
+  int i = 10;
+  while (bytes[1] / i) {
+    i = i * 10;
+  }
+  value = i;
+  value = bytes[1] / value;
+  dht11_data->relative_humidity += value;
+
+  value = bytes[2];
+  dht11_data->temperature = value;
+  i = 10;
+  while (bytes[3] / i) {
+    i = i * 10;
+  }
+  value = i;
+  value = bytes[3] / value;
+  dht11_data->temperature += value;
+
+  return ESP_OK;
+}

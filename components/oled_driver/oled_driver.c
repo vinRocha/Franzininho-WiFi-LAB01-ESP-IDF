@@ -40,6 +40,10 @@
 #include "esp_lcd_panel_vendor.h"
 #include "esp_log.h"
 
+/* datasheet:
+ * https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf
+ */
+
 #define CONFIG_OLED_LCD_CMD_BITS           8
 #define CONFIG_OLED_LCD_PARAM_BITS         8
 
@@ -132,32 +136,33 @@ esp_err_t OledInit(void) {
 
 esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, const uint8_t* bitmap) {
 
-  if (s_d_ctx.initialised) {
-    uint8_t temp_buffer[DISPLAY_SIZE];
-    memset(s_d_ctx.frame_buffer, 0, DISPLAY_SIZE);
-    memset(temp_buffer,            0, DISPLAY_SIZE);
+  if (!s_d_ctx.initialised)
+    return ESP_ERR_INVALID_STATE;
 
-    x_size /= 8; x_offset /= 8;
-    if((x_size + x_offset > COLLUMNS) || (y_size + y_offset > ROWS || !bitmap))
-      return ESP_ERR_INVALID_ARG;
+  uint8_t temp_buffer[DISPLAY_SIZE];
+  memset(s_d_ctx.frame_buffer, 0, DISPLAY_SIZE);
+  memset(temp_buffer         , 0, DISPLAY_SIZE);
 
-    for (int i = 0; i < y_size; i++) {
-      memcpy(temp_buffer + x_offset + (i * COLLUMNS) + (y_offset * COLLUMNS), bitmap + (i * x_size), x_size);
-    }
+  x_size /= 8; x_offset /= 8;
+  if((x_size + x_offset > COLLUMNS) || (y_size + y_offset > ROWS || !bitmap))
+    return ESP_ERR_INVALID_ARG;
 
-    int index = 0;
-    for (int i = 0; index < DISPLAY_SIZE; i++) {
-      int modulo_byte = i % 8;
-      int k = (i / 64) % 16 + (i / 1024) * 128;
-      int pos = (7 - ((i / 8) % 8));
-      uint8_t bit = (temp_buffer[(modulo_byte * COLLUMNS) + k] >> pos) & 0x01;
-      s_d_ctx.frame_buffer[index] |= bit << modulo_byte;
-      if (modulo_byte == 7)
-        index++;
-    }
-
-    esp_lcd_panel_draw_bitmap(s_d_ctx.panel_handle, 0, 0, 128, 64, s_d_ctx.frame_buffer);
-    return ESP_OK;
+  for (int i = 0; i < y_size; i++) {
+    memcpy(temp_buffer + x_offset + (i * COLLUMNS) + (y_offset * COLLUMNS), bitmap + (i * x_size), x_size);
   }
-  return ESP_ERR_INVALID_STATE;
+
+  //Converte a array de bitmap para o formato utilizado pelo SSD1308
+  int index = 0;
+  for (int i = 0; index < DISPLAY_SIZE; i++) {
+    int modulo_byte = i % 8;
+    int k = (i / 64) % 16 + (i / 1024) * 128;
+    int pos = (7 - ((i / 8) % 8));
+    uint8_t bit = (temp_buffer[(modulo_byte * COLLUMNS) + k] >> pos) & 0x01;
+    s_d_ctx.frame_buffer[index] |= bit << modulo_byte;
+    if (modulo_byte == 7)
+      index++;
+  }
+
+  esp_lcd_panel_draw_bitmap(s_d_ctx.panel_handle, 0, 0, 128, 64, s_d_ctx.frame_buffer);
+  return ESP_OK;
 }
