@@ -50,8 +50,7 @@
 
 static const char *s_TAG = "BUZZER_D";
 
-struct driver_state {
-
+struct driver_ctx {
 /* Handle da tarefa para que se possa disparar modo pulse_mode */
   TaskHandle_t task_handle;
 
@@ -67,8 +66,7 @@ struct driver_state {
 /* Variavel para verificar possivel erro */
   esp_err_t rc;
 };
-
-static struct driver_state *s_d_statep = NULL;
+static struct driver_ctx *s_d_ctxp = NULL;
 
 /**
  * @brief Inicializacao interna do driver do buzzer.
@@ -93,13 +91,13 @@ static esp_err_t s_BuzzerInit(void);
  */
 static void s_BuzzerTask(void *pvParameters) {
 
-  struct driver_state d_state;
-  s_d_statep = &d_state;
+  struct driver_ctx d_ctx;
+  s_d_ctxp = &d_ctx;
 
   if (s_BuzzerInit()) {
     ESP_LOGE(s_TAG, "Erro durante a initializacao do driver.\n"
-                    "error code: %d", d_state.rc);
-    s_d_statep = NULL;
+                    "error code: %d", d_ctx.rc);
+    s_d_ctxp = NULL;
     vTaskDelete(NULL);
     return;
   }
@@ -109,26 +107,26 @@ static void s_BuzzerTask(void *pvParameters) {
   /* Implementa buzzer pulse_mode */
   for (;;) {
     //Ativa DAC cossenoidal por period_on ms.
-    dac_cosine_start(d_state.dac0_handle);
-    vTaskDelay((TickType_t) d_state.period_on / portTICK_PERIOD_MS);
+    dac_cosine_start(d_ctx.dac0_handle);
+    vTaskDelay((TickType_t) d_ctx.period_on / portTICK_PERIOD_MS);
 
     //Desliga dac cossenoidal por period_off ms.
-    dac_cosine_stop(d_state.dac0_handle);
-    vTaskDelay((TickType_t) d_state.period_off / portTICK_PERIOD_MS);
+    dac_cosine_stop(d_ctx.dac0_handle);
+    vTaskDelay((TickType_t) d_ctx.period_off / portTICK_PERIOD_MS);
   }
 
   //Nao deveria chegar aqui...
-  dac_cosine_del_channel(d_state.dac0_handle);
-  s_d_statep = NULL;
+  dac_cosine_del_channel(d_ctx.dac0_handle);
+  s_d_ctxp = NULL;
   return;
 }
 
 esp_err_t s_BuzzerInit(void) {
 
-  s_d_statep->rc = ESP_OK;
+  s_d_ctxp->rc = ESP_OK;
 
   //Para suspender ou retomar loop principal
-  s_d_statep->task_handle = xTaskGetCurrentTaskHandle();
+  s_d_ctxp->task_handle = xTaskGetCurrentTaskHandle();
 
   dac_cosine_config_t cos0_cfg = {
         .chan_id = DAC_CHAN_0,
@@ -139,8 +137,8 @@ esp_err_t s_BuzzerInit(void) {
         .atten = BUZZER_ATTENUATION,
         .flags.force_set_freq = true,
   };
-  s_d_statep->rc = dac_cosine_new_channel(&cos0_cfg, &(s_d_statep->dac0_handle));
-  return s_d_statep->rc;
+  s_d_ctxp->rc = dac_cosine_new_channel(&cos0_cfg, &(s_d_ctxp->dac0_handle));
+  return s_d_ctxp->rc;
 }
 
 
@@ -149,9 +147,9 @@ esp_err_t s_BuzzerInit(void) {
  * do dac_0 e realizada no init privado. */
 esp_err_t BuzzerInit() {
 
-  if (s_d_statep) {
+  if (s_d_ctxp)
     return ESP_ERR_NOT_ALLOWED;
-  }
+
   /*  Registra a tarefa BUZZER_D */
   if (xTaskCreate(s_BuzzerTask, s_TAG, CONFIG_BUZZER_TASK_STACK_SIZE, NULL,
                   CONFIG_BUZZER_TASK_PRIORITY, NULL) != pdPASS) {
@@ -163,34 +161,30 @@ esp_err_t BuzzerInit() {
 
 esp_err_t BuzzerSet(char value) {
 
-  if (s_d_statep) {
-    vTaskSuspend(s_d_statep->task_handle);
-    if (value) {
-      dac_cosine_start(s_d_statep->dac0_handle);
-    }
-    else {
-      dac_cosine_stop(s_d_statep->dac0_handle);
-    }
-    return ESP_OK;
+  if (!s_d_ctxp)
+    return ESP_ERR_INVALID_STATE;
 
-  }
-  return ESP_ERR_INVALID_STATE;
+  vTaskSuspend(s_d_ctxp->task_handle);
+  if (value)
+    dac_cosine_start(s_d_ctxp->dac0_handle);
+  else
+    dac_cosine_stop(s_d_ctxp->dac0_handle);
+  return ESP_OK;
 }
 
 esp_err_t BuzzerPulse(unsigned period, unsigned duty_cycle) {
 
-  if (s_d_statep) {
-    duty_cycle = duty_cycle > 100 ? 100 : duty_cycle;
-    if (period) {
-      s_d_statep->period_on = period * duty_cycle / 100;
-      s_d_statep->period_off = period - s_d_statep->period_on;
-      vTaskResume(s_d_statep->task_handle);
-    } else {
-      vTaskSuspend(s_d_statep->task_handle);
-      dac_cosine_stop(s_d_statep->dac0_handle);
-    }
-    return ESP_OK;
-  }
-  return ESP_ERR_INVALID_STATE;
-}
+  if (!s_d_ctxp)
+    return ESP_ERR_INVALID_STATE;
 
+  duty_cycle = duty_cycle > 100 ? 100 : duty_cycle;
+  if (period) {
+    s_d_ctxp->period_on = period * duty_cycle / 100;
+    s_d_ctxp->period_off = period - s_d_ctxp->period_on;
+    vTaskResume(s_d_ctxp->task_handle);
+  } else {
+    vTaskSuspend(s_d_ctxp->task_handle);
+    dac_cosine_stop(s_d_ctxp->dac0_handle);
+  }
+  return ESP_OK;
+}
