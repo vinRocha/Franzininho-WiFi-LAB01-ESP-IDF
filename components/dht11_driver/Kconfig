@@ -6,7 +6,7 @@ menu "DHT11 Driver"
 
     config DHT11_TASK_PRIORITY
         int "DHT11 Task Priority"
-        default 2
+        default 12
 
     config DHT11_TASK_STACK_SIZE
         int "DHT11 Task Stack Size in words"
