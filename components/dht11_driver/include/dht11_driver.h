@@ -48,8 +48,8 @@ typedef struct {
  * @brief Solicita inicializacao do driver do sensor DHT11
  *
  * @return
- *    - ESP_OK (0): Success.
- *    - ESP_FAIL: Falha ao criar a tarefa DHT11_D.
+ *    - ESP_OK (0):            Success.
+ *    - ESP_FAIL:              Falha ao criar a tarefa DHT11_D.
  *    - ESP_ERR_INVALID_STATE: Driver ja encontra-se inicializado.
  *
  */
@@ -61,6 +61,7 @@ esp_err_t Dht11Init(TaskHandle_t *task);
  * @return
  *    - ESP_OK (0): Success.
  *    - ESP_ERR_INVALID_STATE: Driver nao inicializado.
+ *    - ESP_ERR_TIMEOUT:       Driver encontra-se ocupado. Tente novamente.
  *
  */
 esp_err_t Dht11Update(void);
@@ -74,8 +75,8 @@ esp_err_t Dht11Update(void);
  * @return
  *    - ESP_OK (0): Success.
  *    - ESP_ERR_INVALID_ARG:   dht11_data = NULL.
- *    - ESP_ERR_NOT_FINISHED:  Leitura em andamento, tente novamente.
  *    - ESP_ERR_INVALID_STATE: Driver nao inicializado.
+ *    - ESP_ERR_TIMEOUT:       Driver encontra-se ocupado. Tente novamente.
  *
  */
 esp_err_t Dht11Read(dht11_data_t *dht11_data);

@@ -33,6 +33,7 @@
  */
 
 #include <stdio.h>
+#include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -48,6 +49,8 @@ static char *s_TAG = "app_main";
  */
 void app_main(void) {
 
+  esp_err_t rc;
+
   /* Estrutura para receber os dados lidos do sensor */
   dht11_data_t dht11_data;
   TaskHandle_t dht11_task;
@@ -61,12 +64,14 @@ void app_main(void) {
   /* Loop infinito da aplicacao */
   for (;;) {
 
-    Dht11Update(); //solicita atualizacao do sensor
+    //solicita atualizacao do sensor
+    rc = Dht11Update();
+    ESP_LOGI(s_TAG, "Dht11Update() rc: %d", rc);
 
-    vTaskDelay(50 / portTICK_PERIOD_MS); //executa qualquer outra tarefa por 50ms
-
-    if (!Dht11Read(&dht11_data)) { //solicita leitura atualizada do sensor e caso tenha
-                                   //sucesso na leitura, printa o resultado no console.
+    //solicita leitura atualizada do sensor e caso tenha sucesso na leitura, imprime o resultado no console.
+    rc = Dht11Read(&dht11_data);
+    ESP_LOGI(s_TAG, "Dht11Read() rc: %d", rc);
+    if (!rc) {
       fprintf(stdout, "HuRe: %.2f\nTemp: %.2f\n\n",
               dht11_data.relative_humidity, dht11_data.temperature);
     }

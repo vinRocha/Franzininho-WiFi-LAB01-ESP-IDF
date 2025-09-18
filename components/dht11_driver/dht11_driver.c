@@ -45,16 +45,17 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "dht11_driver.h"
 
-#define DHT11_BYTES                     5
-#define DHT11_BITS_EXPECTED             42
+#define DHT11_BYTES                     (5)
+#define DHT11_BITS_EXPECTED             (42)
 /* TIMEOUT_MS deveria ser de 5MS, mas 10MS e o menor intervalo de tempo que
  * uma tarefa pode bloquear devido ao freertos tick Hz = 100. Os intervalos
  * devem ser definidos em multiplos de 10MS.
  */
-#define DHT11_TIMEOUT_MS                10
-#define DHT11_TRIGGER_DELAY_MS          20
+#define DHT11_TIMEOUT_MS                (10)
+#define DHT11_TRIGGER_DELAY_MS          (20)
 
 static const char *s_TAG = "DHT11_D";
 
@@ -79,13 +80,17 @@ struct driver_ctx {
 /* Handle da tarefa para que se possa disparar a leitura do sensor */
   TaskHandle_t task_handle;
 
-/* Variavel para indicar se a leitura esta pronta */
-  bool data_ready;
-
 /* Variavel para verificar erro */
   esp_err_t rc;
 };
+
+/* Ponteiro global para acesso ao contexto do driver */
 static struct driver_ctx *s_d_ctxp = NULL;
+
+/* Mutex para indicar se driver encontra-se ocupado
+ * Uma vez inicializado, esse mutex nao pode ser desalocado
+ */
+static SemaphoreHandle_t s_driver_mutex = NULL;
 
 /**
  * @brief Callback de interupcao do GPIO.
@@ -100,7 +105,7 @@ static struct driver_ctx *s_d_ctxp = NULL;
 static void s_GpioRecvData(void *arg);
 
 /**
- * @brief Inicializacao interna do driver DHT11.
+ * @brief Inicializacao privada do driver DHT11.
  *
  * Configura o pino GPIO do sensor e inicializa
  * parametros de s_d_ctxp.
@@ -111,6 +116,15 @@ static void s_GpioRecvData(void *arg);
  *
  */
 static esp_err_t s_Dht11Init(void);
+
+/**
+ * @brief Desinicializacao privada do driver DHT11.
+ *
+ * Deleta a tarefa principal do driver e limpa s_d_ctxp.
+ * Espera que s_driver_mutex esteja adquirido.
+ *
+ */
+static void s_Dht11Cleanup(void);
 
 /**
  * @brief Loop principal da tarefa DHT11
@@ -129,16 +143,14 @@ static void s_Dht11Task(void *pvParameters) {
   if (s_Dht11Init()) {
     ESP_LOGE(s_TAG, "Erro durante a initializacao do driver.\n"
                     "error code: %d", d_ctx.rc);
-    s_d_ctxp = NULL;
-    vTaskDelete(NULL);
+    s_Dht11Cleanup();
     return;
   }
 
   for (;;) {
-    d_ctx.data_ready = true;
-
-    vTaskSuspend(NULL); //aguarda solicitacao de nova leitura.
-    d_ctx.data_ready = false;
+    xSemaphoreGive(s_driver_mutex);
+    vTaskSuspend(NULL); //dome ate solicitacao de nova leitura.
+    while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
 
     //Configura CONFIG_DHT11_GPIO para zero por > 20ms para disparar uma nova leitura.
     if (gpio_set_level(CONFIG_DHT11_GPIO, 0)) {
@@ -173,8 +185,7 @@ static void s_Dht11Task(void *pvParameters) {
 
     if (d_ctx.bit_count < DHT11_BITS_EXPECTED) { //erro de leitura
       ESP_LOGE(s_TAG, "d_ctx.bit_count: %d", d_ctx.bit_count);
-      memset(d_ctx.bytes, 0, sizeof(d_ctx.bytes));
-      vTaskDelay(DHT11_TIMEOUT_MS / portTICK_PERIOD_MS);
+      vTaskDelay(DHT11_TIMEOUT_MS * 20 / portTICK_PERIOD_MS);
       ulTaskNotifyTake(pdTRUE, 0);
       continue;
     }
@@ -186,7 +197,6 @@ static void s_Dht11Task(void *pvParameters) {
     if (d_ctx.bytes[4] != d_ctx.bytes[0] + d_ctx.bytes[1] +
                          d_ctx.bytes[2] + d_ctx.bytes[3])
       ESP_LOGW(s_TAG, "Warning! Checksum incorreto!");
-
   }
 
 //Nao deveria chegar aqui, a nao ser com erro.
@@ -198,11 +208,7 @@ driver_error:
     default:
       ESP_LOGE(s_TAG, "Driver error.");
   }
-
-  ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
-  s_d_ctxp = NULL;
-  vTaskDelete(NULL);
-
+  s_Dht11Cleanup();
   return;
 }
 
@@ -210,10 +216,17 @@ esp_err_t s_Dht11Init(void) {
 
   s_d_ctxp->rc = ESP_OK;
   memset(s_d_ctxp->bytes, 0, sizeof(s_d_ctxp->bytes));
-  s_d_ctxp->previous_time = 0;
+  s_d_ctxp->previous_time = esp_timer_get_time();
 
-  //Para trigar nova medicao ou retomar execucao da tarefa apos medicao
+  //Para trigar nova medicao ou retomar execucao da tarefa apos interrupcao de gpio
   s_d_ctxp->task_handle = xTaskGetCurrentTaskHandle();
+
+  if (!s_driver_mutex) {
+    s_driver_mutex = xSemaphoreCreateMutex();
+    if (!s_driver_mutex) return s_d_ctxp->rc = -1;
+  }
+  /* Adiquire o mutex cedo no init para informar outras tarefas que o driver esta ocupado */
+  while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
 
   const  gpio_config_t gpio_handle = {
     .pin_bit_mask = 1LLU << CONFIG_DHT11_GPIO,
@@ -224,10 +237,10 @@ esp_err_t s_Dht11Init(void) {
   };
 
   if ((s_d_ctxp->rc= gpio_config(&gpio_handle)))
-    return s_d_ctxp->rc = -1;
+    return s_d_ctxp->rc = -2;
 
   if((s_d_ctxp->rc = gpio_set_level(CONFIG_DHT11_GPIO, 1)))
-    return s_d_ctxp->rc = -2;
+    return s_d_ctxp->rc = -3;
 
 /* TODO: gpio_install_isr_service e gpio_isr_handler_add deveriam estar implementados
  * em uma outra biblioteca que tem como funcao gerenciar os registros de interrupcoes de gpio.
@@ -235,14 +248,25 @@ esp_err_t s_Dht11Init(void) {
 
   if ((s_d_ctxp->rc = gpio_install_isr_service(ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_EDGE |
                                                ESP_INTR_FLAG_IRAM)))
-    return s_d_ctxp->rc = -3;
+    return s_d_ctxp->rc = -4;
 
   if ((s_d_ctxp->rc = gpio_isr_handler_add(CONFIG_DHT11_GPIO, s_GpioRecvData, NULL)))
-    return s_d_ctxp->rc = -4;
+    return s_d_ctxp->rc = -5;
 
   return s_d_ctxp->rc;
 }
 
+void s_Dht11Cleanup(void) {
+
+  TaskHandle_t driver_task = s_d_ctxp->task_handle;
+  s_d_ctxp = NULL;
+  gpio_isr_handler_remove(CONFIG_DHT11_GPIO);
+  gpio_uninstall_isr_service();
+  if (s_driver_mutex)
+    xSemaphoreGive(s_driver_mutex);
+  ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
+  vTaskDelete(driver_task);
+}
 
 void IRAM_ATTR s_GpioRecvData(void *arg) {
 
@@ -271,50 +295,63 @@ esp_err_t Dht11Init(TaskHandle_t *task) {
 esp_err_t Dht11Update(void) {
 
   int64_t current_time;
-  if (!s_d_ctxp)
+  if (!s_driver_mutex)
     return ESP_ERR_INVALID_STATE;
+
+  if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(DHT11_TIMEOUT_MS * 20)))
+    return ESP_ERR_TIMEOUT;
+
+  if (!s_d_ctxp) {
+    xSemaphoreGive(s_driver_mutex);
+    return ESP_ERR_INVALID_STATE;
+  }
 
   current_time = esp_timer_get_time();
   /* Pelo menos 1 segundo de intervalo entre as medicoes */
   if ((current_time - s_d_ctxp->previous_time) > 1000 * 1000) {
     vTaskResume(s_d_ctxp->task_handle);
   }
+  xSemaphoreGive(s_driver_mutex);
   return ESP_OK;
 }
 
 esp_err_t Dht11Read(dht11_data_t *dht11_data) {
 
-  if (!s_d_ctxp)
-    return ESP_ERR_INVALID_STATE;
-
   if (!dht11_data)
     return ESP_ERR_INVALID_ARG;
 
-  if (!s_d_ctxp->data_ready)
-    return ESP_ERR_NOT_FINISHED;
+  if (!s_driver_mutex)
+    return ESP_ERR_INVALID_STATE;
+
+  if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(DHT11_TIMEOUT_MS * 20)))
+    return ESP_ERR_TIMEOUT;
+
+  if (!s_d_ctxp) {
+    xSemaphoreGive(s_driver_mutex);
+    return ESP_ERR_INVALID_STATE;
+  }
 
   //Converte ponto fixo em ponto flutuante...
-  unsigned char bytes[DHT11_BYTES];
-  memcpy(bytes, s_d_ctxp->bytes, sizeof(bytes));
-  float value = bytes[0];
+  float value = s_d_ctxp->bytes[0];
   dht11_data->relative_humidity = value;
   int i = 10;
-  while (bytes[1] / i) {
+  while (s_d_ctxp->bytes[1] / i) {
     i = i * 10;
   }
   value = i;
-  value = bytes[1] / value;
+  value = s_d_ctxp->bytes[1] / value;
   dht11_data->relative_humidity += value;
 
-  value = bytes[2];
+  value = s_d_ctxp->bytes[2];
   dht11_data->temperature = value;
   i = 10;
-  while (bytes[3] / i) {
+  while (s_d_ctxp->bytes[3] / i) {
     i = i * 10;
   }
   value = i;
-  value = bytes[3] / value;
+  value = s_d_ctxp->bytes[3] / value;
   dht11_data->temperature += value;
 
+  xSemaphoreGive(s_driver_mutex);
   return ESP_OK;
 }
