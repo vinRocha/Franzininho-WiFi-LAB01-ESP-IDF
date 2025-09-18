@@ -66,7 +66,7 @@ esp_err_t Dht11Init(TaskHandle_t *task);
 esp_err_t Dht11Update(void);
 
 /**
- * @brief Escreve ultima leitura valida do sensor
+ * @brief Solicita ultima leitura valida do sensor
  *
  * @param dht11_data ponteiro para uma estrutura dht11_data_t no qual
  *                   o resultado da leitura sera gravado.

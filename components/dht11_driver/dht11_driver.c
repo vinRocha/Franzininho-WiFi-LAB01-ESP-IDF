@@ -62,7 +62,7 @@ static const char *s_TAG = "DHT11_D";
  * https://www.mouser.com/datasheet/2/758/DHT11-Technical-Data-Sheet-Translated-Version-1143054.pdf
  */
 
-struct driver_state {
+struct driver_ctx {
 /* Contador de bits recebidos */
   int bit_count;
 
@@ -72,7 +72,7 @@ struct driver_state {
 /* Bytes recebidos do sensor */
   unsigned char bytes[DHT11_BYTES];
 
-/* Variaves para se calcular delta de tempo entra os bits recebidos */
+/* Variaves para se calcular delta de tempo entre os bits recebidos */
   int64_t current_time;
   int64_t previous_time;
 
@@ -85,8 +85,7 @@ struct driver_state {
 /* Variavel para verificar erro */
   esp_err_t rc;
 };
-
-static struct driver_state *s_d_statep = NULL;
+static struct driver_ctx *s_d_ctxp = NULL;
 
 /**
  * @brief Callback de interupcao do GPIO.
@@ -104,7 +103,7 @@ static void s_GpioRecvData(void *arg);
  * @brief Inicializacao interna do driver DHT11.
  *
  * Configura o pino GPIO do sensor e inicializa
- * parametros de s_d_statep.
+ * parametros de s_d_ctxp.
  *
  * @return
  *    - ESP_OK (0): Success
@@ -124,42 +123,45 @@ static esp_err_t s_Dht11Init(void);
  */
 static void s_Dht11Task(void *pvParameters) {
 
-  struct driver_state d_state;
-  s_d_statep = &d_state;
+  struct driver_ctx d_ctx;
+  s_d_ctxp = &d_ctx;
 
   if (s_Dht11Init()) {
     ESP_LOGE(s_TAG, "Erro durante a initializacao do driver.\n"
-                    "error code: %d", d_state.rc);
-    s_d_statep = NULL;
+                    "error code: %d", d_ctx.rc);
+    s_d_ctxp = NULL;
     vTaskDelete(NULL);
     return;
   }
 
   for (;;) {
+    d_ctx.data_ready = true;
+
     vTaskSuspend(NULL); //aguarda solicitacao de nova leitura.
-    d_state.data_ready = false;
+    d_ctx.data_ready = false;
 
     //Configura CONFIG_DHT11_GPIO para zero por > 20ms para disparar uma nova leitura.
     if (gpio_set_level(CONFIG_DHT11_GPIO, 0)) {
-      d_state.rc = -1; //gpio_error
+      d_ctx.rc = -1; //gpio_error
       goto driver_error;
     }
     vTaskDelay(DHT11_TRIGGER_DELAY_MS / portTICK_PERIOD_MS);
+    d_ctx.bit_count = 0;
 
-    d_state.bit_count = 0;
+    //Inicia nova leitura
     if (gpio_set_level(CONFIG_DHT11_GPIO, 1)) {
-      d_state.rc = -1; //gpio_error
+      d_ctx.rc = -1; //gpio_error
       goto driver_error;
     }
 
     for (uint32_t notification;;) {
       notification = ulTaskNotifyTake(pdFALSE, pdMS_TO_TICKS(DHT11_TIMEOUT_MS));
       if (notification == 1) {
-        d_state.bitstream <<= 1;
-        if ((d_state.current_time - d_state.previous_time) > 100)
-          d_state.bitstream++;
-        d_state.previous_time = d_state.current_time;
-        d_state.bit_count++;
+        d_ctx.bitstream <<= 1;
+        if ((d_ctx.current_time - d_ctx.previous_time) > 100)
+          d_ctx.bitstream++;
+        d_ctx.previous_time = d_ctx.current_time;
+        d_ctx.bit_count++;
         continue;
       }
       else if (notification > 1) {
@@ -169,30 +171,27 @@ static void s_Dht11Task(void *pvParameters) {
       break;
     }
 
-    if (d_state.bit_count < DHT11_BITS_EXPECTED) { //erro de leitura
-      ESP_LOGE(s_TAG, "d_state.bit_count: %d", d_state.bit_count);
-      memset(d_state.bytes, 0, sizeof(d_state.bytes));
-      vTaskDelay(1);
+    if (d_ctx.bit_count < DHT11_BITS_EXPECTED) { //erro de leitura
+      ESP_LOGE(s_TAG, "d_ctx.bit_count: %d", d_ctx.bit_count);
+      memset(d_ctx.bytes, 0, sizeof(d_ctx.bytes));
+      vTaskDelay(DHT11_TIMEOUT_MS / portTICK_PERIOD_MS);
       ulTaskNotifyTake(pdTRUE, 0);
-      d_state.data_ready = true;
       continue;
     }
 
-    //Popula os bits recebidos em d_state.bytes[]
+    //Popula os bits recebidos em d_ctx.bytes[]
     for (int i = 0; i < DHT11_BYTES; i++) {
-       d_state.bytes[i] = (d_state.bitstream >> (32 - 8 * i)) & 0xff;
+       d_ctx.bytes[i] = (d_ctx.bitstream >> (32 - 8 * i)) & 0xff;
     }
-
-    if (d_state.bytes[4] != d_state.bytes[0] + d_state.bytes[1] +
-                         d_state.bytes[2] + d_state.bytes[3])
+    if (d_ctx.bytes[4] != d_ctx.bytes[0] + d_ctx.bytes[1] +
+                         d_ctx.bytes[2] + d_ctx.bytes[3])
       ESP_LOGW(s_TAG, "Warning! Checksum incorreto!");
 
-    d_state.data_ready = true;
   }
 
 //Nao deveria chegar aqui, a nao ser com erro.
 driver_error:
-  switch (d_state.rc) {
+  switch (d_ctx.rc) {
     case -1:
       ESP_LOGE(s_TAG, "Erro durante set do GPIO.");
       break;
@@ -201,7 +200,7 @@ driver_error:
   }
 
   ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
-  s_d_statep = NULL;
+  s_d_ctxp = NULL;
   vTaskDelete(NULL);
 
   return;
@@ -209,13 +208,12 @@ driver_error:
 
 esp_err_t s_Dht11Init(void) {
 
-  s_d_statep->rc = ESP_OK;
-  memset(s_d_statep->bytes, 0, sizeof(s_d_statep->bytes));
-  s_d_statep->previous_time = 0;
-  s_d_statep->data_ready = true;
+  s_d_ctxp->rc = ESP_OK;
+  memset(s_d_ctxp->bytes, 0, sizeof(s_d_ctxp->bytes));
+  s_d_ctxp->previous_time = 0;
 
   //Para trigar nova medicao ou retomar execucao da tarefa apos medicao
-  s_d_statep->task_handle = xTaskGetCurrentTaskHandle();
+  s_d_ctxp->task_handle = xTaskGetCurrentTaskHandle();
 
   const  gpio_config_t gpio_handle = {
     .pin_bit_mask = 1LLU << CONFIG_DHT11_GPIO,
@@ -225,39 +223,39 @@ esp_err_t s_Dht11Init(void) {
     .intr_type = GPIO_INTR_NEGEDGE
   };
 
-  if ((s_d_statep->rc= gpio_config(&gpio_handle)))
-    return s_d_statep->rc = -1;
+  if ((s_d_ctxp->rc= gpio_config(&gpio_handle)))
+    return s_d_ctxp->rc = -1;
 
-  if((s_d_statep->rc = gpio_set_level(CONFIG_DHT11_GPIO, 1)))
-    return s_d_statep->rc = -2;
+  if((s_d_ctxp->rc = gpio_set_level(CONFIG_DHT11_GPIO, 1)))
+    return s_d_ctxp->rc = -2;
 
-/* TODO gpio_install_isr_service e gpio_isr_handler_add deveriam ficar
- * estar em uma outra biblioteca que tem como funcao gerenciar os registros
- * de interrupcoes de gpio.
+/* TODO: gpio_install_isr_service e gpio_isr_handler_add deveriam estar implementados
+ * em uma outra biblioteca que tem como funcao gerenciar os registros de interrupcoes de gpio.
  */
 
-  if ((s_d_statep->rc = gpio_install_isr_service(ESP_INTR_FLAG_LOWMED|ESP_INTR_FLAG_EDGE)))
-    return s_d_statep->rc = -3;
+  if ((s_d_ctxp->rc = gpio_install_isr_service(ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_EDGE |
+                                               ESP_INTR_FLAG_IRAM)))
+    return s_d_ctxp->rc = -3;
 
-  if ((s_d_statep->rc = gpio_isr_handler_add(CONFIG_DHT11_GPIO, s_GpioRecvData, NULL)))
-    return s_d_statep->rc = -4;
+  if ((s_d_ctxp->rc = gpio_isr_handler_add(CONFIG_DHT11_GPIO, s_GpioRecvData, NULL)))
+    return s_d_ctxp->rc = -4;
 
-  return s_d_statep->rc;
+  return s_d_ctxp->rc;
 }
 
 
-void s_GpioRecvData(void *arg) {
+void IRAM_ATTR s_GpioRecvData(void *arg) {
 
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-  s_d_statep->current_time = esp_timer_get_time();
-  vTaskNotifyGiveFromISR(s_d_statep->task_handle, &xHigherPriorityTaskWoken);
+  s_d_ctxp->current_time = esp_timer_get_time();
+  vTaskNotifyGiveFromISR(s_d_ctxp->task_handle, &xHigherPriorityTaskWoken);
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 /* Init publico do driver DHT11 */
 esp_err_t Dht11Init(TaskHandle_t *task) {
 
-  if (s_d_statep) {
+  if (s_d_ctxp) {
     return ESP_ERR_NOT_ALLOWED;
   }
 
@@ -273,49 +271,50 @@ esp_err_t Dht11Init(TaskHandle_t *task) {
 esp_err_t Dht11Update(void) {
 
   int64_t current_time;
-  if (s_d_statep) {
-    current_time = esp_timer_get_time();
-    /* Pelo menos 1 segundo de intervalo entre as medicoes */
-    if ((current_time - s_d_statep->previous_time) > 1000 * 1000) {
-      vTaskResume(s_d_statep->task_handle);
-    }
-    return ESP_OK;
+  if (!s_d_ctxp)
+    return ESP_ERR_INVALID_STATE;
+
+  current_time = esp_timer_get_time();
+  /* Pelo menos 1 segundo de intervalo entre as medicoes */
+  if ((current_time - s_d_ctxp->previous_time) > 1000 * 1000) {
+    vTaskResume(s_d_ctxp->task_handle);
   }
-  return ESP_ERR_INVALID_STATE;
+  return ESP_OK;
 }
 
 esp_err_t Dht11Read(dht11_data_t *dht11_data) {
 
-  if (!dht11_data) {
+  if (!s_d_ctxp)
+    return ESP_ERR_INVALID_STATE;
+
+  if (!dht11_data)
     return ESP_ERR_INVALID_ARG;
-  }
-  if (s_d_statep) {
-    if (s_d_statep->data_ready) {
-      //Converte ponto fixo em ponto flutuante...
-      float value = s_d_statep->bytes[0];
-      dht11_data->relative_humidity = value;
-      int i = 10;
-      while (s_d_statep->bytes[1] / i) {
-        i = i * 10;
-      }
-      value = i;
-      value = s_d_statep->bytes[1] / value;
-      dht11_data->relative_humidity += value;
 
-      value = s_d_statep->bytes[2];
-      dht11_data->temperature = value;
-      i = 10;
-      while (s_d_statep->bytes[3] / i) {
-        i = i * 10;
-      }
-      value = i;
-      value = s_d_statep->bytes[3] / value;
-      dht11_data->temperature += value;
-
-      return ESP_OK;
-    }
+  if (!s_d_ctxp->data_ready)
     return ESP_ERR_NOT_FINISHED;
-  }
-  return ESP_ERR_INVALID_STATE;
-}
 
+  //Converte ponto fixo em ponto flutuante...
+  unsigned char bytes[DHT11_BYTES];
+  memcpy(bytes, s_d_ctxp->bytes, sizeof(bytes));
+  float value = bytes[0];
+  dht11_data->relative_humidity = value;
+  int i = 10;
+  while (bytes[1] / i) {
+    i = i * 10;
+  }
+  value = i;
+  value = bytes[1] / value;
+  dht11_data->relative_humidity += value;
+
+  value = bytes[2];
+  dht11_data->temperature = value;
+  i = 10;
+  while (bytes[3] / i) {
+    i = i * 10;
+  }
+  value = i;
+  value = bytes[3] / value;
+  dht11_data->temperature += value;
+
+  return ESP_OK;
+}
