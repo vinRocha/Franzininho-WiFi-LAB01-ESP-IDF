@@ -42,8 +42,8 @@
  *
  * @return
  *    - ESP_OK (0): Success.
- *    - ESP_FAIL: Falha ao inicilizar o HW do display.
  *    - ESP_ERR_NOT_ALLOWED: Driver ja encontra-se inicializado.
+ *    - negative values:     Erro de inicializacao. Verificar oled_driver.c
  *
  */
 esp_err_t OledInit(void);

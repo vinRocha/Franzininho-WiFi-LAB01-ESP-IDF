@@ -44,16 +44,14 @@
  * https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf
  */
 
-#define CONFIG_OLED_LCD_CMD_BITS           8
-#define CONFIG_OLED_LCD_PARAM_BITS         8
+#define CONFIG_OLED_LCD_CMD_BITS    (8)
+#define CONFIG_OLED_LCD_PARAM_BITS  (8)
 
-#define COLLUMNS        (CONFIG_OLED_LCD_H_RES / 8)
-#define ROWS            (CONFIG_OLED_LCD_V_RES)
-#define DISPLAY_SIZE    (ROWS * COLLUMNS)
-
+#define COLLUMNS                    (CONFIG_OLED_LCD_H_RES / 8)
+#define ROWS                        (CONFIG_OLED_LCD_V_RES)
+#define DISPLAY_SIZE                (ROWS * COLLUMNS)
 
 struct driver_ctx {
-
 /* Status de inicializacao */
   bool initialised;
 
@@ -83,52 +81,52 @@ esp_err_t OledInit(void) {
     .i2c_port = CONFIG_OLED_I2C_BUS_PORT,
     .sda_io_num = CONFIG_OLED_PIN_NUM_SDA,
     .scl_io_num = CONFIG_OLED_PIN_NUM_SCL,
-    .flags.enable_internal_pullup = true,
+    .flags.enable_internal_pullup = true
   };
   if ((s_d_ctx.rc = i2c_new_master_bus(&bus_config, &i2c_bus)))
-    return s_d_ctx.rc;
+    return -1;
 
   ESP_LOGI(s_TAG, "Install panel IO");
   esp_lcd_panel_io_handle_t io_handle = NULL;
   esp_lcd_panel_io_i2c_config_t io_config = {
     .dev_addr = CONFIG_OLED_I2C_HW_ADDR,
     .scl_speed_hz = CONFIG_OLED_PIXEL_CLOCK_HZ,
-    .control_phase_bytes = 1,               // According to SSD1306 datasheet
-    .lcd_cmd_bits = CONFIG_OLED_LCD_CMD_BITS,   // According to SSD1306 datasheet
-    .lcd_param_bits = CONFIG_OLED_LCD_CMD_BITS, // According to SSD1306 datasheet
-    .dc_bit_offset = 6,                     // According to SSD1306 datasheet
+    .control_phase_bytes = 1,
+    .lcd_cmd_bits = CONFIG_OLED_LCD_CMD_BITS,
+    .lcd_param_bits = CONFIG_OLED_LCD_CMD_BITS,
+    .dc_bit_offset = 6
   };
   if ((s_d_ctx.rc = esp_lcd_new_panel_io_i2c(i2c_bus, &io_config, &io_handle)))
-    return s_d_ctx.rc;
+    return -2;
 
   ESP_LOGI(s_TAG, "Install SSD1306 panel driver");
   esp_lcd_panel_dev_config_t panel_config = {
     .bits_per_pixel = 1,
-    .reset_gpio_num = CONFIG_OLED_PIN_NUM_RST,
+    .reset_gpio_num = CONFIG_OLED_PIN_NUM_RST
   };
   esp_lcd_panel_ssd1306_config_t ssd1306_config = {
-    .height = CONFIG_OLED_LCD_V_RES,
+    .height = CONFIG_OLED_LCD_V_RES
   };
   panel_config.vendor_config = &ssd1306_config;
   if ((s_d_ctx.rc = esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &s_d_ctx.panel_handle)))
-    return s_d_ctx.rc;
+    return -3;
 
   if ((s_d_ctx.rc = esp_lcd_panel_reset(s_d_ctx.panel_handle)))
-    return s_d_ctx.rc;
+    return -4;
 
   if ((s_d_ctx.rc = esp_lcd_panel_init(s_d_ctx.panel_handle)))
-    return s_d_ctx.rc;
+    return -5;
 
   if((s_d_ctx.rc = esp_lcd_panel_disp_on_off(s_d_ctx.panel_handle, true)))
-    return s_d_ctx.rc;
+    return -6;
 
-  //Reduce contrast (default 0x7F);
+  //Reduce contrast (default 0x7F)
   if ((s_d_ctx.rc = esp_lcd_panel_io_tx_param(io_handle, 0x81, (uint8_t[]){CONFIG_OLED_LCD_CONTRAST}, 1)))
-    return s_d_ctx.rc;
+    return -7;
 
   //Fix display origin in top-left
   if ((s_d_ctx.rc = esp_lcd_panel_mirror(s_d_ctx.panel_handle, true, true)))
-    return s_d_ctx.rc;
+    return -8;
 
   s_d_ctx.initialised = true;
   return s_d_ctx.rc;
@@ -151,7 +149,7 @@ esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, con
     memcpy(temp_buffer + x_offset + (i * COLLUMNS) + (y_offset * COLLUMNS), bitmap + (i * x_size), x_size);
   }
 
-  //Converte a array de bitmap para o formato utilizado pelo SSD1308
+  //Converte a array de bitmap para o formato utilizado pelo SSD1306 em modo de enderecamento horizontal
   int index = 0;
   for (int i = 0; index < DISPLAY_SIZE; i++) {
     int modulo_byte = i % 8;
