@@ -1,0 +1,11 @@
+menu "Input Driver"
+
+    config INPUT_TASK_PRIORITY
+        int "Input Driver Task Priority"
+        default 11
+
+    config INPUT_TASK_STACK_SIZE
+        int "Input Driver Task Stack Size in words"
+        default 2056
+
+endmenu

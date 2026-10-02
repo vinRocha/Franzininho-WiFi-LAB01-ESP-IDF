@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2026 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,13 +23,13 @@
  */
 
 /**
- * @file include/oled_driver.h
+ * @file include/input_driver.h
  *
- * @brief Interface para interagir com o display OLED.
+ * @brief Interface para ler o estaado dos botoes da Franzininho WIFI-LAB01.
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 03 de Julho de 2025
+ * @date 01 de outubro de 2026
  */
 
 #pragma once
@@ -37,32 +37,40 @@
 #include <stdint.h>
 #include "esp_err.h"
 
-/**
- * @brief Solicita inicializacao do driver do OLED.
- *
- * @return
- *    - ESP_OK (0): Success.
- *    - ESP_ERR_NOT_ALLOWED: Driver ja encontra-se inicializado.
- *    - negative values:     Erro de inicializacao. Verificar oled_driver.c
- *
- */
-esp_err_t OledInit(void);
+/* Estrutura de leitura dos botoes */
+typedef struct {
+  uint8_t bt1      :1;
+  uint8_t bt2      :1;
+  uint8_t bt3      :1;
+  uint8_t bt4      :1;
+  uint8_t bt5      :1;
+  uint8_t bt6      :1;
+  uint8_t changed  :1;
+  uint8_t reserved :1;
+} input_data_t;
 
 /**
- * @brief Escreve bitmap no display.
- * 0, 0 (origem) corresponde ao topo esquerdo do display.
+ * @brief Solicita inicializacao do driver de input
  *
- * @x_size   : quantidade de bits na direcao horizontal.
- * @y_size   : quantidade de bits na direcao vertical.
- * @x_offset : offset horizontal para imagem.
- * @y_offset : offset vertical para imagem.
- * @bitmap   : array com representacao da imagem 1px por bit.
+ * @return
+ *    - ESP_OK (0):            Success.
+ *    - ESP_FAIL:              Falha ao criar a tarefa INPUT_D.
+ *    - ESP_ERR_INVALID_STATE: Driver ja encontra-se inicializado.
+ *
+ */
+esp_err_t InputInit(void);
+
+/**
+ * @brief Realiza leitura do estado dos botoes com deboucing via SW.
+ *
+ * @param input_data ponteiro para uma estrutura input_data_t na
+ *                   qual o estado atual dos botões sera gravado.
  *
  * @return
  *    - ESP_OK (0): Success.
- *    - ESP_ERR_INVALID_ARG:   Parametros incorretos.
+ *    - ESP_ERR_INVALID_ARG:   input_data = NULL.
  *    - ESP_ERR_INVALID_STATE: Driver nao inicializado.
+ *    - ESP_ERR_TIMEOUT:       Driver encontra-se ocupado. Tente novamente.
  *
  */
-esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, const uint8_t *bitmap);
-
+esp_err_t InputRead(input_data_t *input_data);

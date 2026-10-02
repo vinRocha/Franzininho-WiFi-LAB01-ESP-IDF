@@ -1,6 +1,6 @@
 # Franzininho WiFi LAB01 - ESP-IDF
 
-Este repositório contem drivers e exemplos de uso para os periféricos encontrados na placa de desenvolvimento [Franzininho WiFi LAB01](https://docs.franzininho.com.br/docs/franzininho-wifi-lab01/) do projeto [Franzininho](https://franzininho.com.br/), desenvolvidos com [esp-idf v5.4.1](https://docs.espressif.com/projects/esp-idf/en/v5.4.1/esp32s2/index.html)
+Este repositório contem drivers e exemplos de uso para os periféricos encontrados na placa de desenvolvimento [Franzininho WiFi LAB01](https://docs.franzininho.com.br/docs/franzininho-wifi-lab01/) do projeto [Franzininho](https://franzininho.com.br/), desenvolvidos com [esp-idf v5.5.5](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s2/index.html)
 
 # Executando os exemplos
 
