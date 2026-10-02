@@ -35,7 +35,6 @@
 #include <stdio.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/projdefs.h"
 #include "freertos/task.h"
 #include "ldr_driver.h"
 
@@ -52,28 +51,27 @@ void app_main(void)
   esp_err_t rc;
   int voltage;
 
+  /* Aguarda 1 segundos para finalizacao de inicializao do HW */
+  vTaskDelay(pdMS_TO_TICKS(1000));
+
   /* Inicia o driver de input */
   if (LdrInit() != ESP_OK)
   {
     ESP_LOGE(s_TAG, "Erro ao inicializar o driver de LDR...\n");
     return;
   }
-  /* Aguarda 1 segundos para finalizacao de inicializao do HW */
-  vTaskDelay(pdMS_TO_TICKS(1000));
 
   /* Loop infinito da aplicacao */
-  rc = LdrRead(&voltage);
   for (;;)
   {
-    ESP_LOGI(s_TAG, "LdrRead() rc: %d", rc);
-    if (!rc) {
-      fprintf(stdout, "Tensao no sensor LDR: %dmV\n", voltage);
-    }
-    vTaskDelay(200 / portTICK_PERIOD_MS);
-
     rc = LdrRead(&voltage);
+    ESP_LOGI(s_TAG, "LdrRead() rc: %d", rc);
+    if (!rc)
+      fprintf(stdout, "Tensao no sensor LDR: %dmV\n", voltage);
+
+    vTaskDelay(200 / portTICK_PERIOD_MS);
     /* Limpa as duas ultimas linhas e escreve os dados novamente. */
-    fprintf(stdout, "\033[2A\033[J\033[H");
+    fprintf(stdout, "\r\033[2A\033[J");
   }
 
   /* Nao deve chegar aqui!! */

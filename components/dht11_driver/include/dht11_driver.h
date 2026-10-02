@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2025 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 14 de Maio de 2025
+ * @date 14 de maio de 2025
  */
 
 #pragma once
@@ -37,7 +37,8 @@
 #include "esp_err.h"
 
 /* Estrutura de dado de leitura do sensor */
-typedef struct {
+typedef struct
+{
   float relative_humidity;
   float temperature;
 } dht11_data_t;

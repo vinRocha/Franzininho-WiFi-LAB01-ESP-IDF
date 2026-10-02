@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2025 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 03 de Julho de 2025
+ * @date 03 de julho de 2025
  */
 
 #pragma once
@@ -65,4 +65,3 @@ esp_err_t OledInit(void);
  *
  */
 esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, const uint8_t *bitmap);
-
