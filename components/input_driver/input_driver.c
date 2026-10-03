@@ -178,6 +178,7 @@ esp_err_t s_InputInit(void) {
 
 void s_InputCleanup(void) {
 
+  s_d_ctx_p = NULL;
   xSemaphoreGive(s_driver_mutex);
   ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
   vTaskDelete(NULL);

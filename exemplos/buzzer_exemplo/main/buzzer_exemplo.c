@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2025 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 29 de Maio de 2025
+ * @date 29 de maio de 2025
  */
 
 #include "esp_log.h"
@@ -45,23 +45,29 @@ static char *s_TAG = "app_main";
  * Nao deve retornar.
  *
  */
-void app_main(void) {
+void app_main(void)
+{
+  /* Aguarda 1 segundo para conclusao de inicializacao do HW */
+  vTaskDelay(pdMS_TO_TICKS(1000));
 
   ESP_LOGI(s_TAG, "Executando buzzer_exemplo.c\n"
                   "Confirme que o jumper de ativacao do buzzer "
                   "encontra-se instalado");
 
   /* Inicia o driver do buzzer */
-  if (BuzzerInit() != ESP_OK) {
+  if (BuzzerInit() != ESP_OK)
+  {
     ESP_LOGE(s_TAG, "Erro ao inicializar o driver do buzzer...\n");
     for(;;){}
   }
 
   /* Loop infinito da aplicacao */
-  for (;;) {
+  for (;;)
+  {
     /* Ativa o buzzer por 0.5s e desativa por 1.5s
      * Repete por 4 vezes */
-    for (int i = 0; i < 4; i++){
+    for (int i = 0; i < 4; i++)
+    {
       BuzzerSet(1);
       vTaskDelay(500 / portTICK_PERIOD_MS);
 

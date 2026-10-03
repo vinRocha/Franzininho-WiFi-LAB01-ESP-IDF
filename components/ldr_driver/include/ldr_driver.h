@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 Franzininho
+ * Copyright (c) 2026 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,45 +23,41 @@
  */
 
 /**
- * @file include/oled_driver.h
+ * @file include/ldr_driver.h
  *
- * @brief Interface para interagir com o display OLED.
+ * @brief Interface para interagir com o sensor LDR.
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 03 de julho de 2025
+ * @date 02 de outubro de 2026
  */
 
 #pragma once
 
-#include <stdint.h>
 #include "esp_err.h"
 
 /**
- * @brief Solicita inicializacao do driver do OLED.
+ * @brief Solicita inicializacao do driver do sensor LDR
  *
  * @return
- *    - ESP_OK (0): Success.
- *    - ESP_ERR_NOT_ALLOWED: Driver ja encontra-se inicializado.
- *    - negative values:     Erro de inicializacao. Verificar oled_driver.c
+ *    - ESP_OK (0):            Success.
+ *    - ESP_FAIL:              Falha ao criar a tarefa DHT11_D.
+ *    - ESP_ERR_INVALID_STATE: Driver ja encontra-se inicializado.
  *
  */
-esp_err_t OledInit(void);
+esp_err_t LdrInit(void);
 
 /**
- * @brief Escreve bitmap no display.
- * 0, 0 (origem) corresponde ao topo esquerdo do display.
+ * @brief Solicita leitura do sensor LDR
  *
- * @x_size   : quantidade de bits na direcao horizontal.
- * @y_size   : quantidade de bits na direcao vertical.
- * @x_offset : offset horizontal para imagem.
- * @y_offset : offset vertical para imagem.
- * @bitmap   : array com representacao da imagem 1px por bit.
+ * @param voltage ponteiro para um inteirno no qual
+ *                o resultado da leitura sera gravado.
  *
  * @return
  *    - ESP_OK (0): Success.
- *    - ESP_ERR_INVALID_ARG:   Parametros incorretos.
+ *    - ESP_ERR_INVALID_ARG:   voltage = NULL.
  *    - ESP_ERR_INVALID_STATE: Driver nao inicializado.
+ *    - ESP_ERR_TIMEOUT:       Driver encontra-se ocupado. Tente novamente.
  *
  */
-esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, const uint8_t *bitmap);
+esp_err_t LdrRead(int *voltage);

@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 Franzininho
+ * Copyright (c) 2026 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,62 +23,55 @@
  */
 
 /**
- * @file oled_exemplo.c
+ * @file ldr_exemplo.c
  *
- * @brief Aplicacao exemplo para desenhar no display OLED.
+ * @brief Aplicacao exemplo para ler o valor do sensor LDR e escreve-lo no console 5x por segundo.
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 03 de julho de 2025
+ * @date 02 de outubro de 2026
  */
 
+#include <stdio.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "images.h"
-#include "oled_driver.h"
+#include "ldr_driver.h"
 
 static char *s_TAG = "app_main";
 
 /**
  * @brief Loop principal
  *
- * Nao deve retornar.
+ * Pode retornar em caso de erro.
  *
  */
 void app_main(void)
 {
-  /* Aguarda 1 segundo para conclusao de inicializacao do HW */
+  esp_err_t rc;
+  int voltage;
+
+  /* Aguarda 1 segundos para finalizacao de inicializao do HW */
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  ESP_LOGI(s_TAG, "Executando oled_exemplo.c\n"
-           "Confirme que os jumpers de ativacao do display "
-           "encontram-se instalados");
-
-  /* Inicia o driver do display */
-  if (OledInit() != ESP_OK)
+  /* Inicia o driver de input */
+  if (LdrInit() != ESP_OK)
   {
-    ESP_LOGE(s_TAG, "Erro ao inicializar o driver do display...\n");
-    for(;;){}
+    ESP_LOGE(s_TAG, "Erro ao inicializar o driver de LDR...\n");
+    return;
   }
 
   /* Loop infinito da aplicacao */
-  while (true)
+  for (;;)
   {
-    OledDrawBitmap(128, 64, 0, 0, franzininho_logo);
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    for (int i = 0; i < 3 * FRAME_COUNT; i++)
-    {
-      OledDrawBitmap(FRAME_WIDTH, FRAME_HEIGHT, FRAME_START_X, FRAME_START_Y,
-                     coffee[i % FRAME_COUNT]);
-      vTaskDelay(pdMS_TO_TICKS(FRAME_DELAY));
-    }
-    for (int i = 0; i < 3 * FRAME_COUNT; i++)
-    {
-      OledDrawBitmap(FRAME_WIDTH, FRAME_HEIGHT, FRAME_START_X, FRAME_START_Y,
-                     skate[i % FRAME_COUNT]);
-      vTaskDelay(pdMS_TO_TICKS(FRAME_DELAY));
-    }
+    rc = LdrRead(&voltage);
+    ESP_LOGI(s_TAG, "LdrRead() rc: %d", rc);
+    if (!rc)
+      fprintf(stdout, "Tensao no sensor LDR: %dmV\n", voltage);
+
+    vTaskDelay(200 / portTICK_PERIOD_MS);
+    /* Limpa as duas ultimas linhas e escreve os dados novamente. */
+    fprintf(stdout, "\r\033[2A\033[J");
   }
 
   /* Nao deve chegar aqui!! */

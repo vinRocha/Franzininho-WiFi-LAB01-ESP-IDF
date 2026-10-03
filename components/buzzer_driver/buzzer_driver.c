@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2025 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 29 de Maio de 2025
+ * @date 29 de maio de 2025
  */
 
 #include "esp_log.h"
@@ -50,19 +50,16 @@
 
 static const char *s_TAG = "BUZZER_D";
 
-struct driver_ctx {
+struct driver_ctx
+{
 /* Handle da tarefa para que se possa disparar modo pulse_mode */
   TaskHandle_t task_handle;
-
 /* Periodo em MS para tocar o buzzer (BuzzerPulse) */
   unsigned period_on;
-
 /* Periodo em MS para desligar o buzzer (BuzzerPulse) */
   unsigned period_off;
-
 /* Handle para output de onda cossenoidal no GPIO_17 -> DAC_0 */
   dac_cosine_handle_t dac0_handle;
-
 /* Variavel para verificar possivel erro */
   esp_err_t rc;
 };
@@ -89,12 +86,13 @@ static esp_err_t s_BuzzerInit(void);
  * Nao utilizado. arg = NULL
  *
  */
-static void s_BuzzerTask(void *pvParameters) {
-
+static void s_BuzzerTask(void *pvParameters)
+{
   struct driver_ctx d_ctx;
   s_d_ctxp = &d_ctx;
 
-  if (s_BuzzerInit()) {
+  if (s_BuzzerInit())
+  {
     ESP_LOGE(s_TAG, "Erro durante a initializacao do driver.\n"
                     "error code: %d", d_ctx.rc);
     s_d_ctxp = NULL;
@@ -105,7 +103,8 @@ static void s_BuzzerTask(void *pvParameters) {
 
   /* Loop principal */
   /* Implementa buzzer pulse_mode */
-  for (;;) {
+  for (;;)
+  {
     //Ativa DAC cossenoidal por period_on ms.
     dac_cosine_start(d_ctx.dac0_handle);
     vTaskDelay((TickType_t) d_ctx.period_on / portTICK_PERIOD_MS);
@@ -121,8 +120,8 @@ static void s_BuzzerTask(void *pvParameters) {
   return;
 }
 
-esp_err_t s_BuzzerInit(void) {
-
+esp_err_t s_BuzzerInit(void)
+{
   s_d_ctxp->rc = ESP_OK;
 
   //Para suspender ou retomar loop principal
@@ -141,12 +140,11 @@ esp_err_t s_BuzzerInit(void) {
   return s_d_ctxp->rc;
 }
 
-
 /* Init publico do driver do buzzer.
  * Apenas registra a tarefa no sistema, a inicializacao
  * do dac_0 e realizada no init privado. */
-esp_err_t BuzzerInit() {
-
+esp_err_t BuzzerInit()
+{
   if (s_d_ctxp)
     return ESP_ERR_NOT_ALLOWED;
 
@@ -159,8 +157,8 @@ esp_err_t BuzzerInit() {
   return ESP_OK;
 }
 
-esp_err_t BuzzerSet(char value) {
-
+esp_err_t BuzzerSet(char value)
+{
   if (!s_d_ctxp)
     return ESP_ERR_INVALID_STATE;
 
@@ -172,8 +170,8 @@ esp_err_t BuzzerSet(char value) {
   return ESP_OK;
 }
 
-esp_err_t BuzzerPulse(unsigned period, unsigned duty_cycle) {
-
+esp_err_t BuzzerPulse(unsigned period, unsigned duty_cycle)
+{
   if (!s_d_ctxp)
     return ESP_ERR_INVALID_STATE;
 

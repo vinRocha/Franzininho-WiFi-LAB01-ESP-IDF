@@ -53,6 +53,9 @@ void app_main(void)
   /* Estrutura para receber os estados dos botoes */
   input_data_t input_data;
 
+  /* Aguarda 1 segundo para conclusao de inicializacao do HW */
+  vTaskDelay(pdMS_TO_TICKS(1000));
+
   /* Inicia o driver de input */
   if (InputInit() != ESP_OK)
   {
@@ -65,10 +68,9 @@ void app_main(void)
   {
     //realiza a leitura do estado dos botoes imprime o resultado no console.
     rc = InputRead(&input_data);
-    /* Limpa e reseta o terminal. */
-    fprintf(stdout, "\033[2J\033[H");
     ESP_LOGI(s_TAG, "InputRead() rc: %d", rc);
-    if (!rc) {
+    if (!rc)
+    {
       fprintf(stdout, "BT1: %s\nBT2: %s\nBT3: %s\nBT4: %s\nBT5: %s\nBT6: %s\nCHANGED: %s\n",
               input_data.bt1 ? "unpressed" : "pressed",
               input_data.bt2 ? "unpressed" : "pressed",
@@ -79,6 +81,8 @@ void app_main(void)
               input_data.changed ? "true" : "false");
     }
     vTaskDelay(100 / portTICK_PERIOD_MS);
+    /* Limpa as ultimas 8 linhas. */
+    fprintf(stdout, "\r\033[8A\033[J");
   }
 
   /* Nao deve chegar aqui!! */

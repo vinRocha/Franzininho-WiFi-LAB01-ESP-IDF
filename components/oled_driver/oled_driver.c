@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2025 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 03 de Julho de 2025
+ * @date 03 de julho de 2025
  */
 
 #include <string.h>
@@ -51,16 +51,14 @@
 #define ROWS                        (CONFIG_OLED_LCD_V_RES)
 #define DISPLAY_SIZE                (ROWS * COLLUMNS)
 
-struct driver_ctx {
+struct driver_ctx
+{
 /* Status de inicializacao */
   bool initialised;
-
 /* Handle para o painel */
   esp_lcd_panel_handle_t panel_handle;
-
 /* Frame buffer do display */
   uint8_t frame_buffer[DISPLAY_SIZE];
-
 /* Variavel para verificar possivel erro */
   esp_err_t rc;
 };
@@ -68,8 +66,8 @@ struct driver_ctx {
 static struct driver_ctx s_d_ctx = {0};
 static const char *s_TAG = "OLED_D";
 
-esp_err_t OledInit(void) {
-
+esp_err_t OledInit(void)
+{
   if(s_d_ctx.initialised)
     return ESP_ERR_NOT_ALLOWED;
 
@@ -132,8 +130,8 @@ esp_err_t OledInit(void) {
   return s_d_ctx.rc;
 }
 
-esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, const uint8_t* bitmap) {
-
+esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, const uint8_t* bitmap)
+{
   if (!s_d_ctx.initialised)
     return ESP_ERR_INVALID_STATE;
 
@@ -145,13 +143,15 @@ esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, con
   if((x_size + x_offset > COLLUMNS) || (y_size + y_offset > ROWS || !bitmap))
     return ESP_ERR_INVALID_ARG;
 
-  for (int i = 0; i < y_size; i++) {
+  for (int i = 0; i < y_size; i++)
+  {
     memcpy(temp_buffer + x_offset + (i * COLLUMNS) + (y_offset * COLLUMNS), bitmap + (i * x_size), x_size);
   }
 
   //Converte a array de bitmap para o formato utilizado pelo SSD1306 em modo de enderecamento horizontal
   int index = 0;
-  for (int i = 0; index < DISPLAY_SIZE; i++) {
+  for (int i = 0; index < DISPLAY_SIZE; i++)
+  {
     int modulo_byte = i % 8;
     int k = (i / 64) % 16 + (i / 1024) * 128;
     int pos = (7 - ((i / 8) % 8));
