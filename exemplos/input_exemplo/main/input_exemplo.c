@@ -53,8 +53,8 @@ void app_main(void)
   /* Estrutura para receber os estados dos botoes */
   input_data_t input_data;
 
-  /* Aguarda 1 segundo para conclusao de inicializacao do HW */
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  /* Aguarda 2 segundo para conclusao de inicializacao do HW */
+  vTaskDelay(pdMS_TO_TICKS(2000));
 
   /* Inicia o driver de input */
   if (InputInit() != ESP_OK)

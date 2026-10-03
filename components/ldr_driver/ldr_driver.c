@@ -62,7 +62,7 @@ struct driver_ctx
 };
 
 /* Ponteiro global para acesso ao contexto do driver */
-static struct driver_ctx *s_d_ctx_p = NULL;
+static struct driver_ctx *s_dctx_p = NULL;
 
 /* Mutex para indicar se driver encontra-se ocupado
  * Uma vez inicializado, esse mutex nao pode ser desalocado
@@ -75,7 +75,7 @@ static void adc_calibration_deinit(adc_cali_handle_t handle);
 /**
  * @brief Inicializacao privada do driver LDR.
  *
- * Cria o mutex, configura o ADC para do sensor e inicializa s_d_ctx_p.
+ * Cria o mutex, configura o ADC para do sensor e inicializa s_dctx_p.
  *
  * @return
  *    - ESP_OK (0): Success
@@ -87,7 +87,7 @@ static esp_err_t s_LdrInit(void);
 /**
  * @brief Desinicializacao privada do driver LDR.
  *
- * Limpa s_d_ctx_p e deleta a tarefa principal do driver.
+ * Limpa s_dctx_p e deleta a tarefa principal do driver.
  * Espera que s_driver_mutex esteja adquirido.
  *
  */
@@ -113,7 +113,7 @@ static void s_LdrTask(void *pvParameters)
   }
 
   while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
-  s_d_ctx_p = &d_ctx;
+  s_dctx_p = &d_ctx;
 
   if (s_LdrInit())
   {
@@ -130,21 +130,21 @@ static void s_LdrTask(void *pvParameters)
     xSemaphoreGive(s_driver_mutex);
     vTaskSuspend(NULL);
     while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
-    if ((s_d_ctx_p->rc = adc_oneshot_read(s_d_ctx_p->adc1_handle, ADC_CHANNEL_0,
-         &s_d_ctx_p->adc_raw)))
+    if ((s_dctx_p->rc = adc_oneshot_read(s_dctx_p->adc1_handle, ADC_CHANNEL_0,
+         &s_dctx_p->adc_raw)))
     {
       ESP_LOGE(s_TAG, "Erro ao ler o sensor LDR...");
-      s_d_ctx_p->adc_raw = 0;
-      s_d_ctx_p->voltage = 0;
+      s_dctx_p->adc_raw = 0;
+      s_dctx_p->voltage = 0;
     }
-    if (s_d_ctx_p->calibrated)
+    if (s_dctx_p->calibrated)
     {
-      if ((s_d_ctx_p->rc = adc_cali_raw_to_voltage(s_d_ctx_p->adc1_chan0_cali_handle,
-           s_d_ctx_p->adc_raw, &s_d_ctx_p->voltage)))
+      if ((s_dctx_p->rc = adc_cali_raw_to_voltage(s_dctx_p->adc1_chan0_cali_handle,
+           s_dctx_p->adc_raw, &s_dctx_p->voltage)))
       {
         ESP_LOGE(s_TAG, "Erro ao calibrar a leitura raw do sensor LDR...");
-        s_d_ctx_p->adc_raw = 0;
-        s_d_ctx_p->voltage = 0;
+        s_dctx_p->adc_raw = 0;
+        s_dctx_p->voltage = 0;
       }
     }
   }
@@ -157,35 +157,35 @@ static void s_LdrTask(void *pvParameters)
 
 esp_err_t s_LdrInit(void)
 {
-  s_d_ctx_p->task_handle = xTaskGetCurrentTaskHandle();
-  if (!s_d_ctx_p->task_handle)
+  s_dctx_p->task_handle = xTaskGetCurrentTaskHandle();
+  if (!s_dctx_p->task_handle)
     return -1;
 
   adc_oneshot_unit_init_cfg_t init_config1 = {
     .unit_id = ADC_UNIT_1
   };
 
-  if ((s_d_ctx_p->rc = adc_oneshot_new_unit(&init_config1, &s_d_ctx_p->adc1_handle)))
-    return s_d_ctx_p->rc;
+  if ((s_dctx_p->rc = adc_oneshot_new_unit(&init_config1, &s_dctx_p->adc1_handle)))
+    return s_dctx_p->rc;
 
   adc_oneshot_chan_cfg_t config = {
     .bitwidth = ADC_BITWIDTH_DEFAULT,
     .atten = ADC_ATTEN_DB_12
   };
 
-  if ((s_d_ctx_p->rc = adc_oneshot_config_channel(s_d_ctx_p->adc1_handle,
+  if ((s_dctx_p->rc = adc_oneshot_config_channel(s_dctx_p->adc1_handle,
                                                   ADC_CHANNEL_0, &config)))
-    return s_d_ctx_p->rc;
+    return s_dctx_p->rc;
 
-  s_d_ctx_p->calibrated = adc_calibration_init(ADC_UNIT_1, ADC_CHANNEL_0, ADC_ATTEN_DB_12,
-                                               &s_d_ctx_p->adc1_chan0_cali_handle);
-  return s_d_ctx_p->rc;
+  s_dctx_p->calibrated = adc_calibration_init(ADC_UNIT_1, ADC_CHANNEL_0, ADC_ATTEN_DB_12,
+                                               &s_dctx_p->adc1_chan0_cali_handle);
+  return s_dctx_p->rc;
 }
 
 void s_LdrCleanup(void)
 {
-  adc_calibration_deinit(s_d_ctx_p->adc1_chan0_cali_handle);
-  s_d_ctx_p = NULL;
+  adc_calibration_deinit(s_dctx_p->adc1_chan0_cali_handle);
+  s_dctx_p = NULL;
   xSemaphoreGive(s_driver_mutex);
   ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
   vTaskDelete(NULL);
@@ -194,7 +194,7 @@ void s_LdrCleanup(void)
 /* Init publico do driver LDR */
 esp_err_t LdrInit()
 {
-  if (s_d_ctx_p)
+  if (s_dctx_p)
     return ESP_ERR_NOT_ALLOWED;
   /*  Registra a tarefa LDR_D */
   if (xTaskCreate(s_LdrTask, s_TAG, CONFIG_LDR_TASK_STACK_SIZE, NULL,
@@ -217,7 +217,7 @@ esp_err_t LdrRead(int *voltage)
   if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(LDR_TIMEOUT_MS)))
     return ESP_ERR_TIMEOUT;
 
-  if (!s_d_ctx_p)
+  if (!s_dctx_p)
   {
     xSemaphoreGive(s_driver_mutex);
     return ESP_ERR_INVALID_STATE;
@@ -227,16 +227,16 @@ esp_err_t LdrRead(int *voltage)
    * recebida do usuario
    * */
 
-  vTaskResume(s_d_ctx_p->task_handle);
+  vTaskResume(s_dctx_p->task_handle);
 
   xSemaphoreGive(s_driver_mutex);
   vTaskDelay(pdMS_TO_TICKS(10));
 
   xSemaphoreTake(s_driver_mutex, portMAX_DELAY);
-  if (s_d_ctx_p->calibrated)
-    *voltage = s_d_ctx_p->voltage;
+  if (s_dctx_p->calibrated)
+    *voltage = s_dctx_p->voltage;
   else
-    *voltage = s_d_ctx_p->adc_raw;
+    *voltage = s_dctx_p->adc_raw;
   xSemaphoreGive(s_driver_mutex);
   return ESP_OK;
 }
