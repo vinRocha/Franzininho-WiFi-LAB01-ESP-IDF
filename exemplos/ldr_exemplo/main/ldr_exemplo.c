@@ -51,8 +51,8 @@ void app_main(void)
   esp_err_t rc;
   int voltage;
 
-  /* Aguarda 1 segundos para finalizacao de inicializao do HW */
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  /* Aguarda 2 segundos para finalizacao de inicializao do HW */
+  vTaskDelay(pdMS_TO_TICKS(2000));
 
   /* Inicia o driver de input */
   if (LdrInit() != ESP_OK)

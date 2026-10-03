@@ -63,12 +63,12 @@ struct driver_ctx
   esp_err_t rc;
 };
 
-static struct driver_ctx s_d_ctx = {0};
+static struct driver_ctx s_dctx = {0};
 static const char *s_TAG = "OLED_D";
 
 esp_err_t OledInit(void)
 {
-  if(s_d_ctx.initialised)
+  if(s_dctx.initialised)
     return ESP_ERR_NOT_ALLOWED;
 
   ESP_LOGI(s_TAG, "Initialize I2C bus");
@@ -81,7 +81,7 @@ esp_err_t OledInit(void)
     .scl_io_num = CONFIG_OLED_PIN_NUM_SCL,
     .flags.enable_internal_pullup = true
   };
-  if ((s_d_ctx.rc = i2c_new_master_bus(&bus_config, &i2c_bus)))
+  if ((s_dctx.rc = i2c_new_master_bus(&bus_config, &i2c_bus)))
     return -1;
 
   ESP_LOGI(s_TAG, "Install panel IO");
@@ -94,7 +94,7 @@ esp_err_t OledInit(void)
     .lcd_param_bits = CONFIG_OLED_LCD_CMD_BITS,
     .dc_bit_offset = 6
   };
-  if ((s_d_ctx.rc = esp_lcd_new_panel_io_i2c(i2c_bus, &io_config, &io_handle)))
+  if ((s_dctx.rc = esp_lcd_new_panel_io_i2c(i2c_bus, &io_config, &io_handle)))
     return -2;
 
   ESP_LOGI(s_TAG, "Install SSD1306 panel driver");
@@ -106,37 +106,37 @@ esp_err_t OledInit(void)
     .height = CONFIG_OLED_LCD_V_RES
   };
   panel_config.vendor_config = &ssd1306_config;
-  if ((s_d_ctx.rc = esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &s_d_ctx.panel_handle)))
+  if ((s_dctx.rc = esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &s_dctx.panel_handle)))
     return -3;
 
-  if ((s_d_ctx.rc = esp_lcd_panel_reset(s_d_ctx.panel_handle)))
+  if ((s_dctx.rc = esp_lcd_panel_reset(s_dctx.panel_handle)))
     return -4;
 
-  if ((s_d_ctx.rc = esp_lcd_panel_init(s_d_ctx.panel_handle)))
+  if ((s_dctx.rc = esp_lcd_panel_init(s_dctx.panel_handle)))
     return -5;
 
-  if((s_d_ctx.rc = esp_lcd_panel_disp_on_off(s_d_ctx.panel_handle, true)))
+  if((s_dctx.rc = esp_lcd_panel_disp_on_off(s_dctx.panel_handle, true)))
     return -6;
 
   //Reduce contrast (default 0x7F)
-  if ((s_d_ctx.rc = esp_lcd_panel_io_tx_param(io_handle, 0x81, (uint8_t[]){CONFIG_OLED_LCD_CONTRAST}, 1)))
+  if ((s_dctx.rc = esp_lcd_panel_io_tx_param(io_handle, 0x81, (uint8_t[]){CONFIG_OLED_LCD_CONTRAST}, 1)))
     return -7;
 
   //Fix display origin in top-left
-  if ((s_d_ctx.rc = esp_lcd_panel_mirror(s_d_ctx.panel_handle, true, true)))
+  if ((s_dctx.rc = esp_lcd_panel_mirror(s_dctx.panel_handle, true, true)))
     return -8;
 
-  s_d_ctx.initialised = true;
-  return s_d_ctx.rc;
+  s_dctx.initialised = true;
+  return s_dctx.rc;
 }
 
 esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, const uint8_t* bitmap)
 {
-  if (!s_d_ctx.initialised)
+  if (!s_dctx.initialised)
     return ESP_ERR_INVALID_STATE;
 
   uint8_t temp_buffer[DISPLAY_SIZE];
-  memset(s_d_ctx.frame_buffer, 0, DISPLAY_SIZE);
+  memset(s_dctx.frame_buffer, 0, DISPLAY_SIZE);
   memset(temp_buffer         , 0, DISPLAY_SIZE);
 
   x_size /= 8; x_offset /= 8;
@@ -156,11 +156,11 @@ esp_err_t OledDrawBitmap(int x_size, int y_size, int x_offset, int y_offset, con
     int k = (i / 64) % 16 + (i / 1024) * 128;
     int pos = (7 - ((i / 8) % 8));
     uint8_t bit = (temp_buffer[(modulo_byte * COLLUMNS) + k] >> pos) & 0x01;
-    s_d_ctx.frame_buffer[index] |= bit << modulo_byte;
+    s_dctx.frame_buffer[index] |= bit << modulo_byte;
     if (modulo_byte == 7)
       index++;
   }
 
-  esp_lcd_panel_draw_bitmap(s_d_ctx.panel_handle, 0, 0, 128, 64, s_d_ctx.frame_buffer);
+  esp_lcd_panel_draw_bitmap(s_dctx.panel_handle, 0, 0, 128, 64, s_dctx.frame_buffer);
   return ESP_OK;
 }
