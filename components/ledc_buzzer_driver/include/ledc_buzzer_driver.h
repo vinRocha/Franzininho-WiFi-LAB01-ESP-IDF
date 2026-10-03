@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2026 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -33,7 +33,7 @@
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 01 de Outubro de 2025
+ * @date 01 de outubro de 2026
  */
 
 #pragma once
@@ -51,7 +51,7 @@
  *    - ESP_ERR_INVALID_STATE: Driver já inicializado.
  *    - ESP_FAIL: Falha na configuração do timer ou canal LEDC.
  */
-esp_err_t LEDBuzzerInit(void);
+esp_err_t LedcBuzzerInit(void);
 
 /**
  * @brief Liga e desliga o buzzer com determinada frequência.
@@ -65,7 +65,7 @@ esp_err_t LEDBuzzerInit(void);
  *    - ESP_ERR_INVALID_STATE: Driver não inicializado.
  *    - ESP_FAIL: Erro ao configurar a frequência LEDC.
  */
-esp_err_t LEDBuzzerSet(char value, int freq);
+esp_err_t LedcBuzzerSet(char value, int freq);
 
 /**
  * @brief Configura o buzzer para tocar periodicamente com determinado duty cycle.
@@ -83,4 +83,4 @@ esp_err_t LEDBuzzerSet(char value, int freq);
  *    - ESP_OK (0): Success.
  *    - ESP_ERR_INVALID_STATE: Driver não inicializado.
  */
-esp_err_t LEDBuzzerPulse(unsigned period, unsigned duty_cycle);
+esp_err_t LedcBuzzerPulse(unsigned period, unsigned duty_cycle);

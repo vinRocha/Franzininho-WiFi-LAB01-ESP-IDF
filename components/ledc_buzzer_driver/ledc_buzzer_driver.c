@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2026 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,11 +32,10 @@
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 01 de Outubro de 2025
+ * @date 01 de outubro de 2026
  */
 
 #include "esp_log.h"
-#include "esp_err.h"
 #include "driver/ledc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -60,9 +59,10 @@ static struct driver_ctx s_dctx = {0};
 
 static void s_LedcBuzzerSetDuty(uint32_t duty);
 
-esp_err_t LEDBuzzerInit(void) {
-    ledc_timer_config_t timer_cfg;
-    ledc_channel_config_t ch_cfg;
+esp_err_t LedcBuzzerInit(void)
+{
+    ledc_timer_config_t timer_cfg = {0};
+    ledc_channel_config_t ch_cfg = {0};
     esp_err_t rc;
 
     if (s_dctx.initialized) {
@@ -110,11 +110,11 @@ esp_err_t LEDBuzzerInit(void) {
     return ESP_OK;
 }
 
-esp_err_t LEDBuzzerSet(char value, int freq) {
+esp_err_t LedcBuzzerSet(char value, int freq) {
     esp_err_t rc;
 
     if (!s_dctx.initialized) {
-        ESP_LOGE(s_TAG, "Driver nao inicializado. Chame LEDBuzzerInit() primeiro.");
+        ESP_LOGE(s_TAG, "Driver nao inicializado. Chame LedcBuzzerInit() primeiro.");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -147,11 +147,11 @@ esp_err_t LEDBuzzerSet(char value, int freq) {
     return ESP_OK;
 }
 
-esp_err_t LEDBuzzerPulse(unsigned period, unsigned duty_cycle) {
+esp_err_t LedcBuzzerPulse(unsigned period, unsigned duty_cycle) {
     esp_err_t rc;
 
     if (!s_dctx.initialized) {
-        ESP_LOGE(s_TAG, "Driver nao inicializado. Chame LEDBuzzerInit() primeiro.");
+        ESP_LOGE(s_TAG, "Driver nao inicializado. Chame LedcBuzzerInit() primeiro.");
         return ESP_ERR_INVALID_STATE;
     }
 
