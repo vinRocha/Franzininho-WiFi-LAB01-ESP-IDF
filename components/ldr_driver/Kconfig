@@ -1,0 +1,11 @@
+menu "LDR Driver"
+
+    config LDR_TASK_PRIORITY
+        int "LDR Task Priority"
+        default 4
+
+    config LDR_TASK_STACK_SIZE
+        int "LDR Task Stack Size in words"
+        default 2056
+
+endmenu

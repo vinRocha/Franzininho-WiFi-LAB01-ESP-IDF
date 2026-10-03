@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 franzininho
+ * Copyright (c) 2025 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,11 +29,10 @@
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 14 de Maio de 2025
+ * @date 14 de maio de 2025
  */
 
 #include <stdio.h>
-#include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -47,23 +46,27 @@ static char *s_TAG = "app_main";
  * Nao deve retornar.
  *
  */
-void app_main(void) {
-
+void app_main(void)
+{
   esp_err_t rc;
 
   /* Estrutura para receber os dados lidos do sensor */
   dht11_data_t dht11_data;
   TaskHandle_t dht11_task;
 
+  /* Aguarda 1 segundo para conclusao de inicializacao do HW */
+  vTaskDelay(pdMS_TO_TICKS(1000));
+
   /* Inicia o driver do sensor DHT11 */
-  if (Dht11Init(&dht11_task) != ESP_OK) {
+  if (Dht11Init(&dht11_task) != ESP_OK)
+  {
     ESP_LOGE(s_TAG, "Erro ao inicializar o driver DHT11...\n");
     for(;;){}
   }
 
   /* Loop infinito da aplicacao */
-  for (;;) {
-
+  for (;;)
+  {
     //solicita atualizacao do sensor
     rc = Dht11Update();
     ESP_LOGI(s_TAG, "Dht11Update() rc: %d", rc);
@@ -71,14 +74,17 @@ void app_main(void) {
     //solicita leitura atualizada do sensor e caso tenha sucesso na leitura, imprime o resultado no console.
     rc = Dht11Read(&dht11_data);
     ESP_LOGI(s_TAG, "Dht11Read() rc: %d", rc);
-    if (!rc) {
-      fprintf(stdout, "HuRe: %.2f\nTemp: %.2f\n\n",
+    if (!rc)
+    {
+      fprintf(stdout, "HuRe: %.2f\nTemp: %.2f\n",
               dht11_data.relative_humidity, dht11_data.temperature);
     }
 
     ESP_LOGI(s_TAG, "uxTaskGetStackHighWaterMark2: %lu\n", uxTaskGetStackHighWaterMark2(dht11_task));
 
     vTaskDelay(3000 / portTICK_PERIOD_MS);
+    /* Limpa as 3 ultimas linhas e escreve os dados novamente. */
+    fprintf(stdout, "\r\033[5A\033[J");
   }
 
   /* Nao deve chegar aqui!! */

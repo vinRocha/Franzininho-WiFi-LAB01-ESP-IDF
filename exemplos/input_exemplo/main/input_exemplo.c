@@ -1,7 +1,7 @@
 /**
  * SPDX-License-Identifier: MIT
  *
- * Copyright (c) 2025 Franzininho
+ * Copyright (c) 2026 Franzininho
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,62 +23,66 @@
  */
 
 /**
- * @file oled_exemplo.c
+ * @file input_exemplo.c
  *
- * @brief Aplicacao exemplo para desenhar no display OLED.
+ * @brief Aplicacao exemplo para ler o estado dos botoes e escreve-los no console 15x por segundo.
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 03 de julho de 2025
+ * @date 14 de Maio de 2025
  */
 
+#include <stdio.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "images.h"
-#include "oled_driver.h"
+#include "input_driver.h"
 
 static char *s_TAG = "app_main";
 
 /**
  * @brief Loop principal
  *
- * Nao deve retornar.
+ * Pode retornar em caso de erro.
  *
  */
 void app_main(void)
 {
+  esp_err_t rc;
+
+  /* Estrutura para receber os estados dos botoes */
+  input_data_t input_data;
+
   /* Aguarda 1 segundo para conclusao de inicializacao do HW */
   vTaskDelay(pdMS_TO_TICKS(1000));
 
-  ESP_LOGI(s_TAG, "Executando oled_exemplo.c\n"
-           "Confirme que os jumpers de ativacao do display "
-           "encontram-se instalados");
-
-  /* Inicia o driver do display */
-  if (OledInit() != ESP_OK)
+  /* Inicia o driver de input */
+  if (InputInit() != ESP_OK)
   {
-    ESP_LOGE(s_TAG, "Erro ao inicializar o driver do display...\n");
-    for(;;){}
+    ESP_LOGE(s_TAG, "Erro ao inicializar o driver de input...\n");
+    return;
   }
 
   /* Loop infinito da aplicacao */
-  while (true)
+  for (;;)
   {
-    OledDrawBitmap(128, 64, 0, 0, franzininho_logo);
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    for (int i = 0; i < 3 * FRAME_COUNT; i++)
+    //realiza a leitura do estado dos botoes imprime o resultado no console.
+    rc = InputRead(&input_data);
+    ESP_LOGI(s_TAG, "InputRead() rc: %d", rc);
+    if (!rc)
     {
-      OledDrawBitmap(FRAME_WIDTH, FRAME_HEIGHT, FRAME_START_X, FRAME_START_Y,
-                     coffee[i % FRAME_COUNT]);
-      vTaskDelay(pdMS_TO_TICKS(FRAME_DELAY));
+      fprintf(stdout, "BT1: %s\nBT2: %s\nBT3: %s\nBT4: %s\nBT5: %s\nBT6: %s\nCHANGED: %s\n",
+              input_data.bt1 ? "unpressed" : "pressed",
+              input_data.bt2 ? "unpressed" : "pressed",
+              input_data.bt3 ? "unpressed" : "pressed",
+              input_data.bt4 ? "unpressed" : "pressed",
+              input_data.bt5 ? "unpressed" : "pressed",
+              input_data.bt6 ? "unpressed" : "pressed",
+              input_data.changed ? "true" : "false");
     }
-    for (int i = 0; i < 3 * FRAME_COUNT; i++)
-    {
-      OledDrawBitmap(FRAME_WIDTH, FRAME_HEIGHT, FRAME_START_X, FRAME_START_Y,
-                     skate[i % FRAME_COUNT]);
-      vTaskDelay(pdMS_TO_TICKS(FRAME_DELAY));
-    }
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    /* Limpa as ultimas 8 linhas. */
+    fprintf(stdout, "\r\033[8A\033[J");
   }
 
   /* Nao deve chegar aqui!! */
