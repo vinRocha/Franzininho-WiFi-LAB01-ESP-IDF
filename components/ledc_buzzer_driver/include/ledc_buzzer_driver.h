@@ -27,13 +27,14 @@
  *
  * @brief Interface para interagir com o buzzer via periférico LEDC (PWM).
  *
- * Substitui o antigo driver buzzer_driver que usava DAC_COSINE. Usa
- * LEDC para controle de frequência suave e sem reconfiguração
- * de periféricos.
+ * Substitui o antigo driver buzzer_driver que usava DAC_COSINE. Usa LEDC
+ * para controle de frequência e ciclo de trabalho. A configuração e o
+ * acionamento do periférico são realizados pela tarefa LEDC_BUZZER_D,
+ * de modo que as funções públicas não bloqueiam a aplicação.
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 01 de outubro de 2026
+ * @date 03 de outubro de 2026
  */
 
 #pragma once
@@ -43,37 +44,44 @@
 /**
  * @brief Solicita inicialização do driver LEDC do buzzer.
  *
- * Configura o timer LEDC (timer 0) e canal LEDC (channel 0, GPIO 17).
- * Não cria tarefas — usa apenas chamadas diretas ao periférico.
+ * Cria a tarefa LEDC_BUZZER_D, que é responsável por configurar o timer
+ * LEDC (timer 0) e canal LEDC (channel 0, GPIO 17) e por processar os
+ * comandos enviados pelas funções públicas.
  *
  * @return
  *    - ESP_OK (0): Success.
- *    - ESP_ERR_INVALID_STATE: Driver já inicializado.
- *    - ESP_FAIL: Falha na configuração do timer ou canal LEDC.
+ *    - ESP_FAIL: Falha ao criar a tarefa LEDC_BUZZER_D.
+ *    - ESP_ERR_NOT_ALLOWED: Driver já encontra-se inicializado.
  */
 esp_err_t LedcBuzzerInit(void);
 
 /**
  * @brief Liga e desliga o buzzer com determinada frequência.
  *
+ * Envia o comando para a tarefa LEDC_BUZZER_D e retorna imediatamente.
+ * Com value > 0 o buzzer passa a emitir um tom contínuo na frequência
+ * informada; com value = 0 o buzzer é desligado (duty = 0).
+ *
  * @param value 0 = OFF (duty = 0)
- *               > 0 = ON (duty = ~50%)
- * @param freq  Frequência em Hertz da onda PWM gerada
+ *              > 0 = ON (duty = ~50%)
+ * @param freq  Frequência em Hertz da onda PWM gerada (40 - 15625 Hz).
  *
  * @return
  *    - ESP_OK (0): Success.
+ *    - ESP_ERR_INVALID_ARG:   Frequência fora do intervalo válido.
  *    - ESP_ERR_INVALID_STATE: Driver não inicializado.
- *    - ESP_FAIL: Erro ao configurar a frequência LEDC.
+ *    - ESP_ERR_TIMEOUT:       Driver encontra-se ocupado. Tente novamente.
  */
 esp_err_t LedcBuzzerSet(char value, int freq);
 
 /**
  * @brief Configura o buzzer para tocar periodicamente com determinado duty cycle.
  *
- * Usa PWM direto via LEDC com período em ms e ciclo de trabalho (duty_cycle)
- * entre 0-100 %. Se period == 0 o buzzer será desligado.
+ * Envia o comando para a tarefa LEDC_BUZZER_D e retorna imediatamente. A
+ * tarefa passa a ligar o buzzer por period_on ms e desligá-lo por period_off
+ * ms, repetidamente, até que um novo comando seja recebido.
  *
- * @param period     Período total do pulso em milissegundos
+ * @param period     Período total do pulso em milissegundos.
  * @param duty_cycle Duty cycle em percentual (0 a 100). Valores > 100 são truncados para 100.
  *
  * caso period = 0 o buzzer será desligado.
@@ -82,5 +90,6 @@ esp_err_t LedcBuzzerSet(char value, int freq);
  * @return
  *    - ESP_OK (0): Success.
  *    - ESP_ERR_INVALID_STATE: Driver não inicializado.
+ *    - ESP_ERR_TIMEOUT:       Driver encontra-se ocupado. Tente novamente.
  */
 esp_err_t LedcBuzzerPulse(unsigned period, unsigned duty_cycle);

@@ -1,3 +1,3 @@
 idf_component_register(SRCS "ledc_buzzer_driver.c"
-                      INCLUDE_DIRS "include"
-                      PRIV_REQUIRES driver)
+                    INCLUDE_DIRS "include"
+                    PRIV_REQUIRES esp_driver_ledc)
