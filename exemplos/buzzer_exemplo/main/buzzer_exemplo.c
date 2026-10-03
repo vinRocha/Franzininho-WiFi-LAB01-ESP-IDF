@@ -47,8 +47,8 @@ static char *s_TAG = "app_main";
  */
 void app_main(void)
 {
-  /* Aguarda 1 segundo para conclusao de inicializacao do HW */
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  /* Aguarda 2 segundo para conclusao de inicializacao do HW */
+  vTaskDelay(pdMS_TO_TICKS(2000));
 
   ESP_LOGI(s_TAG, "Executando buzzer_exemplo.c\n"
                   "Confirme que o jumper de ativacao do buzzer "

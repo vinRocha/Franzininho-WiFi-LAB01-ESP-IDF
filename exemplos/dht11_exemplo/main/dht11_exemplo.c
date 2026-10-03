@@ -53,8 +53,8 @@ void app_main(void)
   /* Estrutura para receber os dados lidos do sensor */
   dht11_data_t dht11_data;
 
-  /* Aguarda 1 segundo para conclusao de inicializacao do HW */
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  /* Aguarda 2 segundo para conclusao de inicializacao do HW */
+  vTaskDelay(pdMS_TO_TICKS(2000));
 
   /* Inicia o driver do sensor DHT11 */
   if (Dht11Init() != ESP_OK)
