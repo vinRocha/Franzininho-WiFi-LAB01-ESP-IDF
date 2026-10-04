@@ -85,7 +85,7 @@ static struct driver_ctx *s_dctx_p = NULL;
 /* Mutex para indicar se driver encontra-se ocupado
  * Uma vez inicializado, esse mutex nao pode ser desalocado
  */
-static SemaphoreHandle_t s_driver_mutex = NULL;
+static SemaphoreHandle_t s_dmutex = NULL;
 
 /**
  * @brief Callback de interupcao do GPIO.
@@ -116,7 +116,7 @@ static esp_err_t s_Dht11Init(void);
  * @brief Desinicializacao privada do driver DHT11.
  *
  * Deleta a tarefa principal do driver e limpa s_dctx_p.
- * Espera que s_driver_mutex esteja adquirido.
+ * Espera que s_dmutex esteja adquirido.
  *
  */
 static void s_Dht11Cleanup(void);
@@ -133,6 +133,20 @@ static void s_Dht11Cleanup(void);
 static void s_Dht11Task(void *pvParameters)
 {
   struct driver_ctx d_ctx;
+
+  if (!s_dmutex)
+  {
+    s_dmutex = xSemaphoreCreateMutex();
+    if (!s_dmutex)
+    {
+      ESP_LOGE(s_TAG, "Erro ao adiquirir o mutex. Tente iniciar o driver novamente");
+      return;
+    }
+  }
+  /* Adiquire o mutex cedo no init para informar outras tarefas que o driver esta ocupado */
+  while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+    continue;
+
   s_dctx_p = &d_ctx;
 
   if (s_Dht11Init())
@@ -145,9 +159,10 @@ static void s_Dht11Task(void *pvParameters)
 
   for (;;)
   {
-    xSemaphoreGive(s_driver_mutex);
+    xSemaphoreGive(s_dmutex);
     vTaskSuspend(NULL); //dome ate solicitacao de nova leitura.
-    while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+    while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+      continue;
 
     //Configura CONFIG_DHT11_GPIO para zero por > 20ms para disparar uma nova leitura.
     if (gpio_set_level(CONFIG_DHT11_GPIO, 0))
@@ -225,14 +240,6 @@ esp_err_t s_Dht11Init(void)
   //Para trigar nova medicao ou retomar execucao da tarefa apos interrupcao de gpio
   s_dctx_p->task_handle = xTaskGetCurrentTaskHandle();
 
-  if (!s_driver_mutex)
-  {
-    s_driver_mutex = xSemaphoreCreateMutex();
-    if (!s_driver_mutex) return s_dctx_p->rc = -1;
-  }
-  /* Adiquire o mutex cedo no init para informar outras tarefas que o driver esta ocupado */
-  while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
-
   const  gpio_config_t gpio_handle = {
     .pin_bit_mask = 1LLU << CONFIG_DHT11_GPIO,
     .mode = GPIO_MODE_INPUT_OUTPUT_OD,
@@ -267,8 +274,8 @@ void s_Dht11Cleanup(void)
   s_dctx_p = NULL;
   gpio_isr_handler_remove(CONFIG_DHT11_GPIO);
   gpio_uninstall_isr_service();
-  if (s_driver_mutex)
-    xSemaphoreGive(s_driver_mutex);
+  if (s_dmutex)
+    xSemaphoreGive(s_dmutex);
   ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
   vTaskDelete(driver_task);
 }
@@ -284,9 +291,8 @@ void IRAM_ATTR s_GpioRecvData(void *arg)
 /* Init publico do driver DHT11 */
 esp_err_t Dht11Init()
 {
-  if (s_dctx_p) {
+  if (s_dctx_p)
     return ESP_ERR_NOT_ALLOWED;
-  }
 
   /*  Registra a tarefa DHT11 */
   if (xTaskCreate(s_Dht11Task, s_TAG, CONFIG_DHT11_TASK_STACK_SIZE, NULL,
@@ -301,15 +307,15 @@ esp_err_t Dht11Init()
 esp_err_t Dht11Update(void)
 {
   int64_t current_time;
-  if (!s_driver_mutex)
+  if (!s_dmutex)
     return ESP_ERR_INVALID_STATE;
 
-  if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(DHT11_TIMEOUT_MS * 20)))
+  if (!xSemaphoreTake(s_dmutex, pdMS_TO_TICKS(DHT11_TIMEOUT_MS * 20)))
     return ESP_ERR_TIMEOUT;
 
   if (!s_dctx_p)
   {
-    xSemaphoreGive(s_driver_mutex);
+    xSemaphoreGive(s_dmutex);
     return ESP_ERR_INVALID_STATE;
   }
 
@@ -317,7 +323,7 @@ esp_err_t Dht11Update(void)
   /* Pelo menos 1 segundo de intervalo entre as medicoes */
   if ((current_time - s_dctx_p->previous_time) > 1000 * 1000)
     vTaskResume(s_dctx_p->task_handle);
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   return ESP_OK;
 }
 
@@ -326,15 +332,15 @@ esp_err_t Dht11Read(dht11_data_t *dht11_data)
   if (!dht11_data)
     return ESP_ERR_INVALID_ARG;
 
-  if (!s_driver_mutex)
+  if (!s_dmutex)
     return ESP_ERR_INVALID_STATE;
 
-  if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(DHT11_TIMEOUT_MS * 20)))
+  if (!xSemaphoreTake(s_dmutex, pdMS_TO_TICKS(DHT11_TIMEOUT_MS * 20)))
     return ESP_ERR_TIMEOUT;
 
   if (!s_dctx_p)
   {
-    xSemaphoreGive(s_driver_mutex);
+    xSemaphoreGive(s_dmutex);
     return ESP_ERR_INVALID_STATE;
   }
 
@@ -361,6 +367,6 @@ esp_err_t Dht11Read(dht11_data_t *dht11_data)
   value = s_dctx_p->bytes[3] / value;
   dht11_data->temperature += value;
 
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   return ESP_OK;
 }

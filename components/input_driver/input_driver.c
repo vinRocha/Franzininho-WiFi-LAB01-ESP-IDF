@@ -58,7 +58,8 @@ enum BUTTON_GPIOS
 #define BUTTON_GPIO_PINS ( (1LLU << BT1) | (1LLU << BT2) | (1LLU << BT3) | \
                            (1LLU << BT4) | (1LLU << BT5) | (1LLU << BT6) )
 
-struct driver_ctx {
+struct driver_ctx
+{
 /* Ultima leitura realizada */
   input_data_t last_read;
 /* Variavel para verificar erro */
@@ -71,7 +72,7 @@ static struct driver_ctx *s_dctx_p = NULL;
 /* Mutex para indicar se driver encontra-se ocupado
  * Uma vez inicializado, esse mutex nao pode ser desalocado
  */
-static SemaphoreHandle_t s_driver_mutex = NULL;
+static SemaphoreHandle_t s_dmutex = NULL;
 
 /**
  * @brief Inicializacao privada do driver de input.
@@ -89,7 +90,7 @@ static esp_err_t s_InputInit(void);
  * @brief Desinicializacao privada do driver de input.
  *
  * Deleta a tarefa principal do driver e limpa s_dctx_p.
- * Espera que s_driver_mutex esteja adquirido.
+ * Espera que s_dmutex esteja adquirido.
  *
  */
 static void s_InputCleanup(void);
@@ -112,29 +113,38 @@ inline static void s_ReadButtons(input_data_t *s0);
  * Nao utilizado. arg = NULL
  *
  */
-static void s_InputTask(void *pvParameters) {
-
+static void s_InputTask(void *pvParameters)
+{
   struct driver_ctx d_ctx = {0};
 
-  if (!s_driver_mutex) {
-    s_driver_mutex = xSemaphoreCreateMutex();
-    if (!s_driver_mutex) vTaskDelete(NULL);
+  if (!s_dmutex)
+  {
+    s_dmutex = xSemaphoreCreateMutex();
+    if (!s_dmutex)
+    {
+      ESP_LOGE(s_TAG, "Erro ao adiquirir o mutex. Tente iniciar o driver novamente");
+      return;
+    }
   }
 
-  while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+  while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+    continue;
   s_dctx_p = &d_ctx;
 
-  if (s_InputInit()) {
+  if (s_InputInit())
+  {
     ESP_LOGE(s_TAG, "Erro durante a initializacao do driver.\n"
                     "error code: %d", d_ctx.rc);
     s_InputCleanup();
     return;
   }
 
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
 
-  for (;;) {
-    while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+  for (;;)
+  {
+    while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+      continue;
 
     input_data_t s0, s1;
 
@@ -152,7 +162,7 @@ static void s_InputTask(void *pvParameters) {
     } while (*s0_p != *s1_p);
 
     s_dctx_p->last_read = s0;
-    xSemaphoreGive(s_driver_mutex);
+    xSemaphoreGive(s_dmutex);
     vTaskDelay(pdMS_TO_TICKS(INPUT_DELAY_MS));
   }
 
@@ -162,8 +172,8 @@ static void s_InputTask(void *pvParameters) {
   return;
 }
 
-esp_err_t s_InputInit(void) {
-
+esp_err_t s_InputInit(void)
+{
   const gpio_config_t gpio_handle = {
     .pin_bit_mask = BUTTON_GPIO_PINS,
     .mode = GPIO_MODE_INPUT,
@@ -176,10 +186,10 @@ esp_err_t s_InputInit(void) {
   return s_dctx_p->rc;
 }
 
-void s_InputCleanup(void) {
-
+void s_InputCleanup(void)
+{
   s_dctx_p = NULL;
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
   vTaskDelete(NULL);
 }
@@ -196,34 +206,36 @@ inline void s_ReadButtons(input_data_t *s0)
 }
 
 /* Init publico do driver de input */
-esp_err_t InputInit() {
-
-  if (s_dctx_p) {
+esp_err_t InputInit()
+{
+  if (s_dctx_p)
     return ESP_ERR_NOT_ALLOWED;
-  }
 
   /*  Registra a tarefa INPUT_D */
   if (xTaskCreate(s_InputTask, s_TAG, CONFIG_INPUT_TASK_STACK_SIZE, NULL,
-                  CONFIG_INPUT_TASK_PRIORITY, NULL) != pdPASS) {
+                  CONFIG_INPUT_TASK_PRIORITY, NULL) != pdPASS)
+  {
     ESP_LOGE(s_TAG, "Erro criando a tarefa %s...", s_TAG);
     return ESP_FAIL;
   }
   return ESP_OK;
 }
 
-esp_err_t InputRead(input_data_t *input_data) {
+esp_err_t InputRead(input_data_t *input_data)
+{
 
   if (!input_data)
     return ESP_ERR_INVALID_ARG;
 
-  if (!s_driver_mutex)
+  if (!s_dmutex)
     return ESP_ERR_INVALID_STATE;
 
-  if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(INPUT_DELAY_MS)))
+  if (!xSemaphoreTake(s_dmutex, pdMS_TO_TICKS(INPUT_DELAY_MS)))
     return ESP_ERR_TIMEOUT;
 
-  if (!s_dctx_p) {
-    xSemaphoreGive(s_driver_mutex);
+  if (!s_dctx_p)
+  {
+    xSemaphoreGive(s_dmutex);
     return ESP_ERR_INVALID_STATE;
   }
 
@@ -235,6 +247,6 @@ esp_err_t InputRead(input_data_t *input_data) {
   else s_dctx_p->last_read.changed = 0;
 
   *input_data = s_dctx_p->last_read;
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   return ESP_OK;
 }

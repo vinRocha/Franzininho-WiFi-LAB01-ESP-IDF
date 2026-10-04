@@ -99,7 +99,7 @@ static struct driver_ctx *s_d_ctx_p = NULL;
 /* Mutex para indicar se driver encontra-se ocupado
  * Uma vez inicializado, esse mutex nao pode ser desalocado
  */
-static SemaphoreHandle_t s_driver_mutex = NULL;
+static SemaphoreHandle_t s_dmutex = NULL;
 
 /**
  * @brief Inicializacao privada do driver LEDC do buzzer.
@@ -118,7 +118,7 @@ static esp_err_t s_LedcBuzzerInit(void);
  * @brief Desinicializacao privada do driver LEDC do buzzer.
  *
  * Deleta a tarefa principal do driver e limpa s_d_ctx_p.
- * Espera que s_driver_mutex esteja adquirido.
+ * Espera que s_dmutex esteja adquirido.
  *
  */
 static void s_LedcBuzzerCleanup(void);
@@ -146,13 +146,18 @@ static void s_LedcBuzzerTask(void *pvParameters)
 {
   struct driver_ctx d_ctx = {0};
 
-  if (!s_driver_mutex)
+  if (!s_dmutex)
   {
-    s_driver_mutex = xSemaphoreCreateMutex();
-    if (!s_driver_mutex) vTaskDelete(NULL);
+    s_dmutex = xSemaphoreCreateMutex();
+    if (!s_dmutex)
+    {
+      ESP_LOGE(s_TAG, "Erro ao adiquirir o mutex. Tente iniciar o driver novamente");
+      return;
+    }
   }
 
-  while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+  while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+    continue;
   s_d_ctx_p = &d_ctx;
 
   if (s_LedcBuzzerInit())
@@ -170,9 +175,10 @@ static void s_LedcBuzzerTask(void *pvParameters)
     /* Aguarda um comando, mantendo o mutex liberado durante o suspend */
     while (s_d_ctx_p->cmd == CMD_NONE)
     {
-      xSemaphoreGive(s_driver_mutex);
+      xSemaphoreGive(s_dmutex);
       vTaskSuspend(NULL);
-      while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+      while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+        continue;
     }
 
     if (s_d_ctx_p->cmd == CMD_PULSE)
@@ -181,16 +187,18 @@ static void s_LedcBuzzerTask(void *pvParameters)
       while (s_d_ctx_p->cmd == CMD_PULSE)
       {
         s_LedcBuzzerSetDuty(s_d_ctx_p->pulse_duty);
-        xSemaphoreGive(s_driver_mutex);
+        xSemaphoreGive(s_dmutex);
         vTaskDelay(pdMS_TO_TICKS(s_d_ctx_p->period_on));
-        while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+        while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+          continue;
 
         if (s_d_ctx_p->cmd != CMD_PULSE) break;
 
         s_LedcBuzzerSetDuty(0);
-        xSemaphoreGive(s_driver_mutex);
+        xSemaphoreGive(s_dmutex);
         vTaskDelay(pdMS_TO_TICKS(s_d_ctx_p->period_off));
-        while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+        while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+          continue;
       }
       s_LedcBuzzerSetDuty(0);
     }
@@ -262,7 +270,7 @@ static esp_err_t s_LedcBuzzerInit(void)
 static void s_LedcBuzzerCleanup(void)
 {
   s_d_ctx_p = NULL;
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
   vTaskDelete(NULL);
 }
@@ -293,7 +301,7 @@ esp_err_t LedcBuzzerInit(void)
 
 esp_err_t LedcBuzzerSet(char value, int freq)
 {
-  if (!s_driver_mutex)
+  if (!s_dmutex)
     return ESP_ERR_INVALID_STATE;
 
   /* Validar intervalo de frequencia (LEDC com 6 bits: 40 Hz - 15625 Hz).
@@ -305,12 +313,12 @@ esp_err_t LedcBuzzerSet(char value, int freq)
     return ESP_ERR_INVALID_ARG;
   }
 
-  if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(LEDC_BUZZER_TIMEOUT_MS)))
+  if (!xSemaphoreTake(s_dmutex, pdMS_TO_TICKS(LEDC_BUZZER_TIMEOUT_MS)))
     return ESP_ERR_TIMEOUT;
 
   if (!s_d_ctx_p)
   {
-    xSemaphoreGive(s_driver_mutex);
+    xSemaphoreGive(s_dmutex);
     return ESP_ERR_INVALID_STATE;
   }
 
@@ -319,23 +327,23 @@ esp_err_t LedcBuzzerSet(char value, int freq)
   s_d_ctx_p->freq_hz = freq;
   vTaskResume(s_d_ctx_p->task_handle);
 
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   return ESP_OK;
 }
 
 esp_err_t LedcBuzzerPulse(unsigned period, unsigned duty_cycle)
 {
-  if (!s_driver_mutex)
+  if (!s_dmutex)
     return ESP_ERR_INVALID_STATE;
 
   if (duty_cycle > 100) duty_cycle = 100;
 
-  if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(LEDC_BUZZER_TIMEOUT_MS)))
+  if (!xSemaphoreTake(s_dmutex, pdMS_TO_TICKS(LEDC_BUZZER_TIMEOUT_MS)))
     return ESP_ERR_TIMEOUT;
 
   if (!s_d_ctx_p)
   {
-    xSemaphoreGive(s_driver_mutex);
+    xSemaphoreGive(s_dmutex);
     return ESP_ERR_INVALID_STATE;
   }
 
@@ -355,6 +363,6 @@ esp_err_t LedcBuzzerPulse(unsigned period, unsigned duty_cycle)
   }
   vTaskResume(s_d_ctx_p->task_handle);
 
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   return ESP_OK;
 }

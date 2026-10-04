@@ -150,7 +150,8 @@ esp_err_t BuzzerInit()
 
   /*  Registra a tarefa BUZZER_D */
   if (xTaskCreate(s_BuzzerTask, s_TAG, CONFIG_BUZZER_TASK_STACK_SIZE, NULL,
-                  CONFIG_BUZZER_TASK_PRIORITY, NULL) != pdPASS) {
+                  CONFIG_BUZZER_TASK_PRIORITY, NULL) != pdPASS)
+  {
     ESP_LOGE(s_TAG, "Erro criando a tarefa %s...", s_TAG);
     return ESP_FAIL;
   }
@@ -176,11 +177,13 @@ esp_err_t BuzzerPulse(unsigned period, unsigned duty_cycle)
     return ESP_ERR_INVALID_STATE;
 
   duty_cycle = duty_cycle > 100 ? 100 : duty_cycle;
-  if (period) {
+  if (period)
+  {
     s_dctx_p->period_on = period * duty_cycle / 100;
     s_dctx_p->period_off = period - s_dctx_p->period_on;
     vTaskResume(s_dctx_p->task_handle);
-  } else {
+  } else
+  {
     vTaskSuspend(s_dctx_p->task_handle);
     dac_cosine_stop(s_dctx_p->dac0_handle);
   }
