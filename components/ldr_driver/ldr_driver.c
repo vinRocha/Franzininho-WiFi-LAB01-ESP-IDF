@@ -67,8 +67,9 @@ static struct driver_ctx *s_dctx_p = NULL;
 /* Mutex para indicar se driver encontra-se ocupado
  * Uma vez inicializado, esse mutex nao pode ser desalocado
  */
-static SemaphoreHandle_t s_driver_mutex = NULL;
+static SemaphoreHandle_t s_dmutex = NULL;
 
+/* Funcoes auxiliares configaracao/desconfiguracao da calibracao do ADC */
 static uint8_t adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle);
 static void adc_calibration_deinit(adc_cali_handle_t handle);
 
@@ -88,7 +89,7 @@ static esp_err_t s_LdrInit(void);
  * @brief Desinicializacao privada do driver LDR.
  *
  * Limpa s_dctx_p e deleta a tarefa principal do driver.
- * Espera que s_driver_mutex esteja adquirido.
+ * Espera que s_dmutex esteja adquirido.
  *
  */
 static void s_LdrCleanup(void);
@@ -106,13 +107,18 @@ static void s_LdrTask(void *pvParameters)
 {
   struct driver_ctx d_ctx = {0};
 
-  if (!s_driver_mutex)
+  if (!s_dmutex)
   {
-    s_driver_mutex = xSemaphoreCreateMutex();
-    if (!s_driver_mutex) vTaskDelete(NULL);
+    s_dmutex = xSemaphoreCreateMutex();
+    if (!s_dmutex)
+    {
+      ESP_LOGE(s_TAG, "Erro ao adiquirir o mutex. Tente iniciar o driver novamente");
+      return;
+    }
   }
 
-  while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+  while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+    continue;
   s_dctx_p = &d_ctx;
 
   if (s_LdrInit())
@@ -123,13 +129,14 @@ static void s_LdrTask(void *pvParameters)
     return;
   }
 
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
 
   for (;;)
   {
-    xSemaphoreGive(s_driver_mutex);
+    xSemaphoreGive(s_dmutex);
     vTaskSuspend(NULL);
-    while(!xSemaphoreTake(s_driver_mutex, portMAX_DELAY));
+    while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+      continue;
     if ((s_dctx_p->rc = adc_oneshot_read(s_dctx_p->adc1_handle, ADC_CHANNEL_0,
          &s_dctx_p->adc_raw)))
     {
@@ -186,7 +193,7 @@ void s_LdrCleanup(void)
 {
   adc_calibration_deinit(s_dctx_p->adc1_chan0_cali_handle);
   s_dctx_p = NULL;
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   ESP_LOGE(s_TAG, "Deletando a tarefa %s...", s_TAG);
   vTaskDelete(NULL);
 }
@@ -211,15 +218,15 @@ esp_err_t LdrRead(int *voltage)
   if (!voltage)
     return ESP_ERR_INVALID_ARG;
 
-  if (!s_driver_mutex)
+  if (!s_dmutex)
     return ESP_ERR_INVALID_STATE;
 
-  if (!xSemaphoreTake(s_driver_mutex, pdMS_TO_TICKS(LDR_TIMEOUT_MS)))
+  if (!xSemaphoreTake(s_dmutex, pdMS_TO_TICKS(LDR_TIMEOUT_MS)))
     return ESP_ERR_TIMEOUT;
 
   if (!s_dctx_p)
   {
-    xSemaphoreGive(s_driver_mutex);
+    xSemaphoreGive(s_dmutex);
     return ESP_ERR_INVALID_STATE;
   }
   /*
@@ -229,15 +236,16 @@ esp_err_t LdrRead(int *voltage)
 
   vTaskResume(s_dctx_p->task_handle);
 
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   vTaskDelay(pdMS_TO_TICKS(10));
 
-  xSemaphoreTake(s_driver_mutex, portMAX_DELAY);
+  while(!xSemaphoreTake(s_dmutex, portMAX_DELAY))
+      continue;
   if (s_dctx_p->calibrated)
     *voltage = s_dctx_p->voltage;
   else
     *voltage = s_dctx_p->adc_raw;
-  xSemaphoreGive(s_driver_mutex);
+  xSemaphoreGive(s_dmutex);
   return ESP_OK;
 }
 

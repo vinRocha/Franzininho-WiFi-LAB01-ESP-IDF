@@ -1,0 +1,15 @@
+menu "RGB LED Driver"
+
+    config RGB_LED_R_GPIO
+        int "Red LED GPIO"
+        default 14
+
+    config RGB_LED_G_GPIO
+        int "Green LED GPIO"
+        default 13
+
+    config RGB_LED_B_GPIO
+        int "Blue LED GPIO"
+        default 12
+
+endmenu
