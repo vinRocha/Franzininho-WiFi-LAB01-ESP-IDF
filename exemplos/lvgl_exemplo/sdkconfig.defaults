@@ -1,0 +1,26 @@
+# Project defaults for learn_lvgl (ESP32-S2 + SSD1306 + LVGL 9.2 + esp_lvgl_port)
+#
+# Target can also be set with `idf.py set-target esp32s2`; keeping it here makes
+# a fresh clone build without an extra step.
+CONFIG_IDF_TARGET="esp32s2"
+CONFIG_ESP_CONSOLE_USB_CDC=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# --- LVGL 9.2 monochrome (SSD1306, LV_COLOR_FORMAT_I1) -----------------------
+
+# Fonts: only what we use. Montserrat 14 is the small default; UNSCII_8 is a
+# crisp 1-bit bitmap font that is far more legible on a 1bpp OLED.
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_UNSCII_8=y
+
+# A theme designed for monochrome displays.
+CONFIG_LV_USE_THEME_MONO=y
+
+# Configuration is Kconfig-driven by default (no lv_conf.h needed):
+#   CONFIG_LV_CONF_SKIP=y  (this is the default)
+# Set it to 'n' only if you supply your own lv_conf.h.
+
+# NEVER enable this together with esp_lvgl_port monochrome mode -- the port
+# raises #error if CONFIG_LV_COLOR_DEPTH_1 is set. The display format is I1;
+# the LVGL color depth stays at the default (16).
+# CONFIG_LV_COLOR_DEPTH_1=y

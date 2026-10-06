@@ -1,0 +1,14 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "display.c"
+        "ui/ui_main.c"
+    INCLUDE_DIRS
+        "."
+        "ui"
+    REQUIRES
+        esp_lcd
+        esp_lvgl_port
+        lvgl
+        driver
+)
