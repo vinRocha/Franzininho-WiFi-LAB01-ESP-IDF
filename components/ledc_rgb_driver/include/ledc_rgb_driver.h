@@ -23,60 +23,47 @@
  */
 
 /**
- * @file ldr_exemplo.c
+ * @file ledc_rgb_driver.h
  *
- * @brief Aplicacao exemplo para ler o valor do sensor LDR e escreve-lo no console 5x por segundo.
+ * @brief Interface para interagir com o LED RGB via periferico LEDC (PWM).
  *
  * @author Vinicius Silva <silva.viniciusr@gmail.com>
  *
- * @date 02 de outubro de 2026
+ * @date 03 de outubro de 2026
  */
 
-#include <stdio.h>
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/projdefs.h"
-#include "freertos/task.h"
-#include "rgb_led_driver.h"
+#pragma once
 
-static char *s_TAG = "app_main";
+#include <stdint.h>
+#include "esp_err.h"
 
 /**
- * @brief Loop principal
+ * @brief Solicita inicialização do driver RGB.
  *
- * Pode retornar em caso de erro.
+ * Cria a tarefa RGB_LED_D, que é responsável por configurar o timer
+ * LEDC (timer 0) os canais LEDC (channel 0, channel 1 e channel 2)
+ * e por processar os comandos enviados pelas funções públicas.
  *
+ * @return
+ *    - ESP_OK (0): Success.
+ *    - ESP_FAIL: Falha ao criar a tarefa RGB_LED_D.
+ *    - ESP_ERR_NOT_ALLOWED: Driver já encontra-se inicializado.
  */
-void app_main(void)
-{
-  esp_err_t rc;
+esp_err_t RgbLedInit(void);
 
-  /* Aguarda 2 segundos para finalizacao de inicializao do HW */
-  vTaskDelay(pdMS_TO_TICKS(2000));
-
-  /* Inicia o driver de input */
-  if (RgbLedInit() != ESP_OK)
-  {
-    ESP_LOGE(s_TAG, "Erro ao inicializar o driver de LDR...\n");
-    return;
-  }
-
-  /* Loop infinito da aplicacao */
-  for (;;)
-  {
-    rc = RgbLedSet(255, 0, 0);
-    ESP_LOGI(s_TAG, "LdrRead() rc: %d", rc);
-    vTaskDelay(pdMS_TO_TICKS(200));
-
-    rc = RgbLedSet(0, 0, 255);
-    ESP_LOGI(s_TAG, "LdrRead() rc: %d", rc);
-    vTaskDelay(pdMS_TO_TICKS(200));
-
-    rc = RgbLedSet(0, 255, 0);
-    ESP_LOGI(s_TAG, "LdrRead() rc: %d", rc);
-    vTaskDelay(pdMS_TO_TICKS(200));
-  }
-
-  /* Nao deve chegar aqui!! */
-  return;
-}
+/**
+ * @brief Configura a intensidade de brilho de cada LED.
+ *
+ *
+ * @param r valor de brilho para o led vermelho (0 - 255)
+ *
+ * @param g valor de brilho para o led verde    (0 - 255)
+ *
+ * @param b valor de brilho para o led azul     (0 - 255)
+ *
+ * @return
+ *    - ESP_OK (0): Success.
+ *    - ESP_ERR_INVALID_STATE: Driver não inicializado.
+ *    - ESP_ERR_TIMEOUT:       Driver encontra-se ocupado. Tente novamente.
+ */
+esp_err_t RgbLedSet(uint8_t r, uint8_t g, uint8_t b);
