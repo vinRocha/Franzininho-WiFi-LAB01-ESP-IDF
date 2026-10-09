@@ -45,8 +45,8 @@
 #include "ledc_buzzer_driver.h"
 
 #define BUZZER_GPIO            CONFIG_LEDC_BUZZER_GPIO
-#define LEDC_TIMER             LEDC_TIMER_0
-#define LEDC_CHANNEL           LEDC_CHANNEL_0
+#define LEDC_TIMER             LEDC_TIMER_1
+#define LEDC_CHANNEL           LEDC_CHANNEL_4
 #define LEDC_SPEED_MODE        LEDC_LOW_SPEED_MODE
 /* Resolucao de duty de 6 bits (64 niveis).
  * Com REF_TICK (1 MHz) o periferico LEDC aceita f de ~16 Hz a 15625 Hz
