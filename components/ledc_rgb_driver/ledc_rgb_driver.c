@@ -23,7 +23,7 @@
  */
 
 /**
- * @file rgb_led_driver.c
+ * @file ledc_rgb_driver.c
  *
  * @brief Implementacao do driver para interagir com os LEDs RGB.
  *
@@ -37,7 +37,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "hal/ledc_types.h"
-#include "rgb_led_driver.h"
+#include "ledc_rgb_driver.h"
 
 #define R_GPIO                 CONFIG_RGB_LED_R_GPIO
 #define G_GPIO                 CONFIG_RGB_LED_G_GPIO
